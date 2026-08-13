@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: padaria_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: padariadb
+      POSTGRES_USER: padaria
+      POSTGRES_PASSWORD: padaria123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: padaria_api
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://padaria:padaria123@postgres:5432/padariadb
+      JWT_SECRET: minha_chave_secreta_local_32chars!!
+      JWT_EXPIRES: 8h
+      PORT: 3001
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - "3001:3001"
+
+  frontend:
+    build: ./frontend
+    container_name: padaria_web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:3001
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
