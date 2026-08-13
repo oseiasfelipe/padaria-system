@@ -2,17 +2,14 @@ databases:
   - name: padariadb
     databaseName: padariadb
     user: padaria
-    plan: free
 
 services:
-  # ── Backend Node.js ──────────────────────────────────────────────────────
   - type: web
     name: padaria-api
     runtime: node
     rootDir: backend
     buildCommand: npm install
     startCommand: node src/index.js
-    plan: free
     envVars:
       - key: NODE_ENV
         value: production
@@ -25,19 +22,17 @@ services:
           name: padariadb
           property: connectionString
       - key: FRONTEND_URL
-        value: https://padaria-web.onrender.com   # ajuste após criar o frontend
+        value: https://padaria-web.onrender.com
 
-  # ── Frontend React (Static Site) ─────────────────────────────────────────
   - type: web
     name: padaria-web
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
-    plan: free
     envVars:
       - key: VITE_API_URL
-        value: https://padaria-api.onrender.com   # ajuste com a URL real do backend
+        value: https://padaria-api.onrender.com
     routes:
       - type: rewrite
         source: /*
