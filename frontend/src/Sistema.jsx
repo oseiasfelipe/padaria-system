@@ -511,7 +511,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
 }
 
 // ─── COMANDA DIGITAL (PADARIA) ────────────────────────────────────────────────
-function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast}){
+function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{}}){
   const [modo,setModo]=useState("balcao");
   const [mesaSel,setMesaSel]=useState(null);
   const [carrinho,setCarrinho]=useState([]);
@@ -585,6 +585,8 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     setComandas(cs=>cs.map(c=>c.id===comanda.id?{...c,status:"fechada",totalFinal:totalMesa,pagamentos,nomeCliente}:c));
     setToast({msg:"🎉 Mesa "+mesaSel+" fechada — "+fmt(totalMesa),tipo:"ok"});
     imprimirCupom({id:Date.now(),mesa:mesaSel,itens:comanda.itens,status:"fechada",hora:now(),data:today(),totalFinal:totalMesa,pagamentos,nomeCliente,tipo:"mesa"});
+    // Libera comanda física vinculada à mesa
+    setComandasFisicas(cs=>cs.map(cf=>cf.mesa===String(mesaSel)&&cf.status==="em_uso"?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf));
     setMesaSel(null);setModalPag(false);
   };
 
@@ -592,6 +594,8 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}]);
     setToast({msg:"🛍️ Balcão finalizado — "+fmt(totalBalcao),tipo:"ok"});
     imprimirCupom({...{id:Date.now(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}});
+    // Libera comanda física que estava vinculada ao balcão
+    setComandasFisicas(cs=>cs.map(cf=>cf.tipo==="balcao"&&cf.status==="em_uso"&&cf.nomeCliente===(nomeCliente||"Consumidor")?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf));
     setCarrinho([]);setNomeCliente("");setModalPag(false);
   };
 
@@ -1201,19 +1205,7 @@ const imprimirLoteComandas = (comandas, nomeEstab="PADARIA XV", subtitulo="Apres
   win.document.close();
 };
 
-function GestaoComandas({ setToast }) {
-  // Estado das comandas físicas
-  const [comandasFisicas, setComandasFisicas] = useState(() => {
-    // Gera 50 comandas iniciais (001-050)
-    return Array.from({ length: 50 }, (_, i) => ({
-      codigo: String(i + 1).padStart(3, "0"),
-      status: "livre",       // "livre" | "em_uso" | "paga"
-      pedidos: [],
-      mesa: null,
-      nomeCliente: "",
-      abertoEm: null,
-    }));
-  });
+function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas }) {
 
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [buscaCodigo, setBuscaCodigo]   = useState("");
@@ -1414,7 +1406,7 @@ function GestaoComandas({ setToast }) {
               {comandaSel.status === "livre" && (
                 <button style={{ ...S.btnOk }} onClick={() => {
                   marcarEmUso(comandaSel.codigo, comandaSel.nomeCliente, comandaSel.mesa);
-                  setToast({ msg: "✅ Comanda " + comandaSel.codigo + " em uso!", tipo: "ok" });
+                  setToast({ msg: "✅ Comanda " + comandaSel.codigo + " em uso!" + (comandaSel.mesa?" — Mesa "+comandaSel.mesa:""), tipo: "ok" });
                   setComandaSel(null);
                 }}>✅ Iniciar Atendimento</button>
               )}
@@ -1467,7 +1459,7 @@ function GestaoComandas({ setToast }) {
 
 
 // ─── PDV TABLET (modo atendente otimizado) ───────────────────────────────────
-function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast }) {
+function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast, setComandasFisicas=()=>{} }) {
   const [etapa, setEtapa]           = useState("comanda");  // comanda | pedido | pagamento
   const [codComanda, setCodComanda] = useState("");
   const [comandaAtiva, setComandaAtiva] = useState(null);    // {codigo, tipo, mesa, nomeCliente}
@@ -1519,6 +1511,10 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
     else setVendas(vs=>[...vs,{...venda,total}]);
     imprimirCupom(venda);
     setToast({msg:"🎉 Venda finalizada — "+fmt(total),tipo:"ok"});
+    // Libera comanda física pelo código
+    if(comandaAtiva?.codigo){
+      setComandasFisicas(cs=>cs.map(cf=>cf.codigo===comandaAtiva.codigo?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf));
+    }
     setCarrinho([]); setComandaAtiva(null); setEtapa("comanda"); setModalPag(false);
   };
 
@@ -1662,32 +1658,79 @@ const PERFIS = {
 };
 
 function GestaoUsuarios({ usuarioAtual, setToast }) {
-  const [usuarios, setUsuarios] = useState([
-    { id:1, nome:"Administrador", email:"admin@padaria.com", perfil:"admin", ativo:true, pin:"1234" },
-  ]);
-  const [form, setForm] = useState({ nome:"", email:"", perfil:"atendente", pin:"", ativo:true });
-  const [editId, setEditId] = useState(null);
+  const [usuarios, setUsuarios] = useState([]);
+  const [form, setForm]         = useState({ nome:"", email:"", perfil:"atendente", pin:"", ativo:true });
+  const [editId, setEditId]     = useState(null);
   const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [loading, setLoading]   = useState(true);
 
-  const salvar = () => {
+  // Carregar usuários do backend
+  useEffect(() => {
+    const token = sessionStorage.getItem('padaria_token');
+    fetch('/auth/me', { headers:{ Authorization:'Bearer '+token } })
+      .then(() => fetch('/usuarios', { headers:{ Authorization:'Bearer '+token } }))
+      .then(r => r.json())
+      .then(data => { if(Array.isArray(data)) setUsuarios(data); })
+      .catch(() => setToast({msg:"⚠️ Erro ao carregar usuários",tipo:"err"}))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const salvar = async () => {
     if (!form.nome || !form.email) { setToast({msg:"⚠️ Nome e email obrigatórios",tipo:"err"}); return; }
     if (!editId && form.pin.length < 4) { setToast({msg:"⚠️ PIN deve ter 4 dígitos",tipo:"err"}); return; }
-    if (editId) {
-      setUsuarios(u => u.map(x => x.id===editId ? {...x,...form} : x));
-      setToast({msg:"✅ Usuário atualizado",tipo:"ok"});
-      setEditId(null);
-    } else {
-      setUsuarios(u => [...u, {...form, id:Date.now()}]);
-      setToast({msg:"✅ Usuário criado: "+form.nome,tipo:"ok"});
+    const token = sessionStorage.getItem('padaria_token');
+    try {
+      if (editId) {
+        const r = await fetch('/usuarios/'+editId, {
+          method:'PUT', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token},
+          body: JSON.stringify(form)
+        });
+        const data = await r.json();
+        if(!r.ok) throw new Error(data.erro);
+        setUsuarios(u => u.map(x => x.id===editId ? data : x));
+        setToast({msg:"✅ Usuário atualizado",tipo:"ok"});
+        setEditId(null);
+      } else {
+        const r = await fetch('/usuarios', {
+          method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token},
+          body: JSON.stringify(form)
+        });
+        const data = await r.json();
+        if(!r.ok) throw new Error(data.erro);
+        setUsuarios(u => [...u, data]);
+        setToast({msg:"✅ Usuário criado: "+form.nome,tipo:"ok"});
+      }
+      setForm({ nome:"", email:"", perfil:"atendente", pin:"", ativo:true });
+    } catch(err) {
+      setToast({msg:"❌ "+err.message,tipo:"err"});
     }
-    setForm({ nome:"", email:"", perfil:"atendente", pin:"", ativo:true });
   };
 
   const editar = (u) => { setForm({...u, pin:""}); setEditId(u.id); };
-  const toggleAtivo = (id) => setUsuarios(u => u.map(x => x.id===id?{...x,ativo:!x.ativo}:x));
-  const remover = (id) => {
+
+  const toggleAtivo = async (id) => {
+    const token = sessionStorage.getItem('padaria_token');
+    try {
+      const r = await fetch('/usuarios/'+id+'/toggle', {
+        method:'PATCH', headers:{ Authorization:'Bearer '+token }
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.erro);
+      setUsuarios(u => u.map(x => x.id===id ? data : x));
+    } catch(err) { setToast({msg:"❌ "+err.message,tipo:"err"}); }
+  };
+
+  const remover = async (id) => {
     if (id===1) { setToast({msg:"⚠️ Admin padrão não pode ser removido",tipo:"err"}); return; }
-    setUsuarios(u => u.filter(x => x.id!==id));
+    const token = sessionStorage.getItem('padaria_token');
+    try {
+      const r = await fetch('/usuarios/'+id, {
+        method:'DELETE', headers:{ Authorization:'Bearer '+token }
+      });
+      if(!r.ok) throw new Error('Erro ao remover');
+      setUsuarios(u => u.filter(x => x.id!==id));
+      setToast({msg:"✅ Usuário removido",tipo:"ok"});
+    } catch(err) { setToast({msg:"❌ "+err.message,tipo:"err"}); }
   };
 
   return (
@@ -2157,6 +2200,12 @@ export default function App(){
   const [comandas,setComandas]=useState([]);
   const [vendas,setVendas]=useState([]);
   const [toast,setToast]=useState(null);
+  const [comandasFisicas,setComandasFisicas]=useState(()=>
+    Array.from({length:50},(_,i)=>({
+      codigo:String(i+1).padStart(3,"0"),
+      status:"livre", pedidos:[], mesa:null, nomeCliente:"", abertoEm:null,
+    }))
+  );
 
   const abertas=comandas.filter(c=>c.status==="aberta").length;
   const estBaixo=produtos.filter(p=>p.tipo==="mercado"&&p.estoque!==null&&p.estoque<=5).length;
@@ -2202,8 +2251,8 @@ export default function App(){
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
-        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} />}
-        {aba==="comandas" &&<GestaoComandas setToast={setToast} />}
+        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} />}
+        {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
         {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} vendas={vendas} setToast={setToast} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
