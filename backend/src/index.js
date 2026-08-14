@@ -23,7 +23,7 @@ app.use('/auth',       require('./routes/auth'));
 app.use('/produtos',   require('./routes/produtos'));
 app.use('/comandas',   require('./routes/comandas'));
 app.use('/relatorios', require('./routes/relatorios'));
-
+app.use('/usuarios', require('./routes/usuarios'));
 // Health check
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
 
