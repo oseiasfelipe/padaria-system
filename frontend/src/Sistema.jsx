@@ -259,6 +259,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
     }));
     setVendas(vs=>[...vs,{id:uid(),tipo:"mercado",itens:[...carrinho],total,pagamentos,nomeCliente:nomeCliente||"Consumidor",hora:now(),data:today(),status:"fechada"}]);
     setToast({msg:"🛒 Venda finalizada — "+fmt(total),tipo:"ok"});
+    imprimirCupom({id:Date.now(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:total,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"mercado"});
     setCarrinho([]);setNomeCliente("");setModalPag(false);
   };
 
@@ -423,12 +424,14 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     if(!comanda||comanda.itens.length===0)return;
     setComandas(cs=>cs.map(c=>c.id===comanda.id?{...c,status:"fechada",totalFinal:totalMesa,pagamentos,nomeCliente}:c));
     setToast({msg:"🎉 Mesa "+mesaSel+" fechada — "+fmt(totalMesa),tipo:"ok"});
+    imprimirCupom({id:Date.now(),mesa:mesaSel,itens:comanda.itens,status:"fechada",hora:now(),data:today(),totalFinal:totalMesa,pagamentos,nomeCliente,tipo:"mesa"});
     setMesaSel(null);setModalPag(false);
   };
 
   const finalizarBalcao=(pagamentos)=>{
     setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}]);
     setToast({msg:"🛍️ Balcão finalizado — "+fmt(totalBalcao),tipo:"ok"});
+    imprimirCupom({...{id:Date.now(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}});
     setCarrinho([]);setNomeCliente("");setModalPag(false);
   };
 
@@ -797,7 +800,7 @@ function Historico({comandas,vendas}){
               </div>
               <div style={{display:"flex",gap:7,alignItems:"center"}}>
                 <span style={{fontSize:15,fontWeight:800,color:"#f0c040"}}>{fmt(v.totalFinal||v.total||0)}</span>
-                <button style={S.btnS} onClick={()=>imprimir(v)}>🖨️</button>
+                <button style={S.btnS} onClick={()=>imprimirCupom(v)}>🖨️ Cupom</button>
               </div>
             </div>
           ))}
@@ -808,6 +811,221 @@ function Historico({comandas,vendas}){
 }
 
 // ─── RELATÓRIO ────────────────────────────────────────────────────────────────
+
+
+// ─── IMPRESSÃO DE CUPOM (ESC/POS via Print Window) ───────────────────────────
+const gerarCupom = (venda, nomeEstabelecimento="🥖 PadariaSystem") => {
+  const fmt2 = (v) => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+  const fmtKg2= (g) => g>=1000?(g/1000).toFixed(3)+" kg":g.toFixed(0)+"g";
+  const linha = "--------------------------------";
+  const linhas = [
+    "================================",
+    nomeEstabelecimento.padStart(20+(nomeEstabelecimento.length>>1)),
+    "================================",
+    venda.tipo==="balcao"||venda.origemTipo==="balcao"
+      ? "BALCAO - "+(venda.nomeCliente||"Consumidor")
+      : venda.tipo==="mercado"||venda.origemTipo==="mercado"
+        ? "PDV - "+(venda.nomeCliente||"Consumidor")
+        : "MESA "+venda.mesa+(venda.nomeCliente?" - "+venda.nomeCliente:""),
+    venda.data+" "+venda.hora,
+    linha,
+    "ITEM                  QTD   TOTAL",
+    linha,
+    ...(venda.itens||[]).map(i=>{
+      const nome=(i.nome||"").substring(0,20).padEnd(20);
+      if(i.vendaPeso){
+        const pesoStr=fmtKg2(i.pesoKg*1000).padStart(6);
+        const valStr=fmt2(i.total).padStart(8);
+        return nome+pesoStr+valStr;
+      }
+      const qtdStr=("x"+i.qtd).padStart(4);
+      const valStr=fmt2((i.preco||0)*(i.qtd||1)).padStart(8);
+      return nome+qtdStr+valStr;
+    }),
+    linha,
+    "TOTAL:         "+fmt2(venda.totalFinal||venda.total||0).padStart(18),
+    linha,
+    ...((venda.pagamentos||[]).map(p=>(p.forma||"").toUpperCase().padEnd(10)+fmt2(p.valor).padStart(23))),
+    ...(venda.pagamento&&!venda.pagamentos?["PGTO: "+venda.pagamento.toUpperCase()]:[]),
+    "================================",
+    "     Obrigado pela preferencia!  ",
+    "================================",
+  ];
+  return linhas.join("\n");
+};
+
+const imprimirCupom = (venda, nomeEstabelecimento) => {
+  const texto = gerarCupom(venda, nomeEstabelecimento);
+  const win = window.open("","_blank","width=320,height=600");
+  if(!win) { alert(texto); return; }
+  win.document.write(`
+    <html><head><title>Cupom</title>
+    <style>
+      body { font-family: 'Courier New', monospace; font-size: 12px; margin: 8px; white-space: pre; }
+      @media print { button { display:none; } }
+    </style></head>
+    <body>
+      <pre>${texto}</pre>
+      <br/>
+      <button onclick="window.print();window.close();" style="width:100%;padding:8px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button>
+    </body></html>
+  `);
+  win.document.close();
+  setTimeout(()=>win.print(), 500);
+};
+
+// ─── GESTÃO DE USUÁRIOS ───────────────────────────────────────────────────────
+const PERFIS = {
+  admin:     { label:"Administrador", cor:"#f0c040", desc:"Acesso total ao sistema" },
+  caixa:     { label:"Caixa",         cor:"#6ab8ff", desc:"Fecha vendas e vê relatórios do dia" },
+  atendente: { label:"Atendente",     cor:"#8aee3a", desc:"Lança pedidos nas mesas e balcão" },
+};
+
+function GestaoUsuarios({ usuarioAtual, setToast }) {
+  const [usuarios, setUsuarios] = useState([
+    { id:1, nome:"Administrador", email:"admin@padaria.com", perfil:"admin", ativo:true, pin:"1234" },
+  ]);
+  const [form, setForm] = useState({ nome:"", email:"", perfil:"atendente", pin:"", ativo:true });
+  const [editId, setEditId] = useState(null);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+
+  const salvar = () => {
+    if (!form.nome || !form.email) { setToast({msg:"⚠️ Nome e email obrigatórios",tipo:"err"}); return; }
+    if (!editId && form.pin.length < 4) { setToast({msg:"⚠️ PIN deve ter 4 dígitos",tipo:"err"}); return; }
+    if (editId) {
+      setUsuarios(u => u.map(x => x.id===editId ? {...x,...form} : x));
+      setToast({msg:"✅ Usuário atualizado",tipo:"ok"});
+      setEditId(null);
+    } else {
+      setUsuarios(u => [...u, {...form, id:Date.now()}]);
+      setToast({msg:"✅ Usuário criado: "+form.nome,tipo:"ok"});
+    }
+    setForm({ nome:"", email:"", perfil:"atendente", pin:"", ativo:true });
+  };
+
+  const editar = (u) => { setForm({...u, pin:""}); setEditId(u.id); };
+  const toggleAtivo = (id) => setUsuarios(u => u.map(x => x.id===id?{...x,ativo:!x.ativo}:x));
+  const remover = (id) => {
+    if (id===1) { setToast({msg:"⚠️ Admin padrão não pode ser removido",tipo:"err"}); return; }
+    setUsuarios(u => u.filter(x => x.id!==id));
+  };
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Resumo por perfil */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+        {Object.entries(PERFIS).map(([key,p]) => (
+          <div key={key} style={{...S.card,textAlign:"center",borderColor:p.cor+"44"}}>
+            <div style={{fontSize:22,fontWeight:900,color:p.cor}}>{usuarios.filter(u=>u.perfil===key&&u.ativo).length}</div>
+            <div style={{fontSize:13,fontWeight:700,color:p.cor,marginTop:2}}>{p.label}</div>
+            <div style={{fontSize:11,color:"#c8a060",marginTop:4}}>{p.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={S.grid2}>
+        {/* Formulário */}
+        <div style={S.card}>
+          <div style={S.sT()}>{editId?"✏️ Editar":"👤 Novo"} Usuário</div>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div><label style={S.lbl}>Nome completo</label>
+              <input style={S.inp} placeholder="Ex: Maria Silva" value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} /></div>
+            <div><label style={S.lbl}>Email / Login</label>
+              <input style={S.inp} placeholder="maria@padaria.com" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} /></div>
+            <div><label style={S.lbl}>Perfil de acesso</label>
+              <select style={S.inp} value={form.perfil} onChange={e=>setForm({...form,perfil:e.target.value})}>
+                {Object.entries(PERFIS).map(([k,p])=><option key={k} value={k}>{p.label}</option>)}
+              </select></div>
+            <div>
+              <label style={S.lbl}>PIN de acesso (4 dígitos){editId?" — deixe vazio para manter":""}</label>
+              <div style={{position:"relative"}}>
+                <input style={{...S.inp,letterSpacing:8,fontSize:20}} type={mostrarSenha?"text":"password"}
+                  placeholder="••••" maxLength={6} value={form.pin}
+                  onChange={e=>setForm({...form,pin:e.target.value.replace(/\D/g,"")})} />
+                <button onClick={()=>setMostrarSenha(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",cursor:"pointer",color:"#c8a060",fontSize:16}}>
+                  {mostrarSenha?"🙈":"👁️"}
+                </button>
+              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <input type="checkbox" checked={form.ativo} onChange={e=>setForm({...form,ativo:e.target.checked})} style={{accentColor:"#c8860a",width:16,height:16}} />
+              <label style={{...S.lbl,margin:0}}>Usuário ativo</label>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button style={S.btnP} onClick={salvar}>{editId?"💾 Salvar":"➕ Criar Usuário"}</button>
+              {editId&&<button style={S.btnS} onClick={()=>{setEditId(null);setForm({nome:"",email:"",perfil:"atendente",pin:"",ativo:true});}}>Cancelar</button>}
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de usuários */}
+        <div style={S.card}>
+          <div style={S.sT()}>👥 Funcionários ({usuarios.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {usuarios.map(u => {
+              const perf = PERFIS[u.perfil]||{label:u.perfil,cor:"#aaa"};
+              return (
+                <div key={u.id} style={{padding:"12px 14px",borderRadius:12,background:"#150c00",border:"1px solid "+(u.ativo?"#3d2200":"#2a1000"),opacity:u.ativo?1:0.6}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                        <span style={{fontWeight:700,color:"#f5e6c8",fontSize:14}}>{u.nome}</span>
+                        <span style={{...S.bdg(""), background:perf.cor+"22",color:perf.cor,border:"1px solid "+perf.cor+"44",fontSize:10,padding:"2px 8px",borderRadius:20,fontWeight:700}}>{perf.label}</span>
+                        {!u.ativo&&<span style={S.bdg("r")}>Inativo</span>}
+                      </div>
+                      <div style={{fontSize:12,color:"#c8a060"}}>{u.email}</div>
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button style={S.btnS} onClick={()=>toggleAtivo(u.id)} title={u.ativo?"Desativar":"Ativar"}>⟳</button>
+                      <button style={S.btnS} onClick={()=>editar(u)}>✏️</button>
+                      {u.id!==1&&<button style={S.btnD} onClick={()=>remover(u.id)}>✕</button>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabela de permissões */}
+      <div style={S.card}>
+        <div style={S.sT()}>🔐 Tabela de Permissões por Perfil</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr>
+                {["Funcionalidade","Administrador","Caixa","Atendente"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",textAlign:"left",borderBottom:"2px solid #c8860a",color:h==="Funcionalidade"?"#c8a060":"#f0c040",fontWeight:700}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Lançar pedidos (balcão/mesa)","✅","✅","✅"],
+                ["Fechar conta / pagamento","✅","✅","❌"],
+                ["PDV Mercadoria","✅","✅","❌"],
+                ["Ver relatórios","✅","✅ (dia atual)","❌"],
+                ["Fechamento de caixa","✅","✅","❌"],
+                ["Cadastrar produtos","✅","❌","❌"],
+                ["Gerenciar usuários","✅","❌","❌"],
+                ["Cancelar / estornar venda","✅","✅ (c/ PIN)","❌"],
+                ["Controle de estoque","✅","✅","❌"],
+              ].map(([func,...perms],i)=>(
+                <tr key={func} style={{background:i%2===0?"#150c00":"transparent"}}>
+                  <td style={{padding:"9px 14px",color:"#f5e6c8",borderBottom:"1px solid #3d2200"}}>{func}</td>
+                  {perms.map((p,j)=>(
+                    <td key={j} style={{padding:"9px 14px",textAlign:"center",borderBottom:"1px solid #3d2200",color:p==="✅"?"#8aee3a":p==="❌"?"#ff6a6a":"#f0c040"}}>{p}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── FECHAMENTO DE CAIXA ──────────────────────────────────────────────────────
 function FechamentoCaixa({comandas,vendas,setToast}){
@@ -1169,6 +1387,7 @@ export default function App(){
     {key:"estoque",label:"📦 Estoque"+(estBaixo>0?" ⚠️":"")},
     {key:"cadastro",label:"⚙️ Cadastro"},
     {key:"historico",label:"🧾 Histórico"},
+    {key:"usuarios",label:"👥 Usuários"},
     {key:"caixa",label:"🔒 Caixa"},
     {key:"relatorio",label:"📊 Relatório"},
   ];
@@ -1201,6 +1420,7 @@ export default function App(){
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
+        {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
         {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} vendas={vendas} setToast={setToast} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
       </main>
