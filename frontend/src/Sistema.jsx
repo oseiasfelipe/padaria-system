@@ -1849,7 +1849,7 @@ export default function App(){
       <header style={S.header}>
         <div style={S.logo}>
           <span style={{background:"linear-gradient(135deg,#c8860a,#e6a020)",borderRadius:8,padding:"3px 8px",fontSize:16}}>🥖🛒</span>
-          <span>PadariaSystem <span style={{fontSize:12,color:"#c8a060",fontWeight:400}}>PDV + Comanda Digital</span></span>
+          <span>PADARIA XV <span style={{fontSize:12,color:"#c8a060",fontWeight:400}}>PDV + Comanda Digital</span></span>
         </div>
         <nav style={{display:"flex",gap:4}}>
           {abas.map(n=>(
