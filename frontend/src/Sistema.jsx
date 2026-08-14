@@ -44,11 +44,11 @@ const uid    = () => Date.now() + Math.random();
 
 // ─── ESTILOS ──────────────────────────────────────────────────────────────────
 const S = {
-  app:     { fontFamily:"'Playfair Display','Georgia',serif", background:"#1a0f00", minHeight:"100vh", color:"#f5e6c8" },
-  header:  { background:"linear-gradient(135deg,#2d1a00 0%,#4a2c00 50%,#2d1a00 100%)", borderBottom:"2px solid #c8860a", padding:"0 24px", display:"flex", alignItems:"center", justifyContent:"space-between", height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px rgba(200,134,10,0.3)" },
+  app:     { fontFamily:"'Playfair Display','Georgia',serif", background:"#0d0800", minHeight:"100vh", color:"#f5e6c8" },
+  header:  { background:"linear-gradient(135deg,#0a0a0a 0%,#1a1200 40%,#0a0a0a 100%)", borderBottom:"2px solid #c8a020", padding:"0 24px", display:"flex", alignItems:"center", justifyContent:"space-between", height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px rgba(200,134,10,0.3)" },
   logo:    { fontSize:20, fontWeight:800, color:"#f0c040", display:"flex", alignItems:"center", gap:8 },
   main:    { padding:22, maxWidth:1440, margin:"0 auto" },
-  card:    { background:"linear-gradient(145deg,#2a1800,#1f1000)", border:"1px solid #3d2200", borderRadius:14, padding:18, boxShadow:"0 8px 32px rgba(0,0,0,0.4)" },
+  card:    { background:"linear-gradient(145deg,#2a1800,#1f1000)", border:"1px solid #2a1a00", borderRadius:14, padding:18, boxShadow:"0 8px 32px rgba(0,0,0,0.4)" },
   cardG:   { background:"linear-gradient(145deg,#1a1000,#220e00)", border:"1px solid #4a2800", borderRadius:14, padding:18 },
   sT:      (c)=>({ fontSize:15, fontWeight:700, color:c||"#f0c040", marginBottom:14, display:"flex", alignItems:"center", gap:7 }),
   grid2:   { display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 },
@@ -73,6 +73,26 @@ const S = {
                background:a?(c==="g"?"linear-gradient(135deg,#1a5a00,#2a8a00)":"linear-gradient(135deg,#c8860a,#e6a020)"):"transparent",
                color:a?(c==="g"?"#b8ffb8":"#1a0f00"):c==="g"?"#8aee3a":"#c8a060" }),
 };
+
+
+// ─── HOOK RESPONSIVO ─────────────────────────────────────────────────────────
+function useResponsivo() {
+  const [tela, setTela] = useState({
+    largura: window.innerWidth,
+    tablet: window.innerWidth < 1024,
+    mobile: window.innerWidth < 640,
+  });
+  useEffect(() => {
+    const fn = () => setTela({
+      largura: window.innerWidth,
+      tablet: window.innerWidth < 1024,
+      mobile: window.innerWidth < 640,
+    });
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return tela;
+}
 
 // ─── TOAST ────────────────────────────────────────────────────────────────────
 function Toast({msg,tipo,onClose}){
@@ -134,7 +154,7 @@ function ModalPesagem({produto,onConfirmar,onFechar}){
 const PIX_CONFIG = {
   chave:       "",           // Ex: "11999998888" ou "padaria@email.com" ou "00.000.000/0001-00"
   tipo:        "telefone",   // "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
-  nome:        "PADARIA",    // Nome que aparece no QR Code (max 25 chars)
+  nome:        "PADARIA XV",    // Nome que aparece no QR Code (max 25 chars)
   cidade:      "SAO PAULO",  // Cidade
 };
 
@@ -834,7 +854,7 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias}){
               {filtrados.map(p=>{
                 const cat=categorias.find(c=>c.id===p.categoriaId);
                 return(
-                  <div key={p.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:9,background:"#150c00",border:"1px solid #3d2200"}}>
+                  <div key={p.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:9,background:"#150c00",border:"1px solid #2a1a00"}}>
                     <div>
                       <div style={{fontWeight:600,color:"#f0f0f0",fontSize:13,display:"flex",alignItems:"center",gap:6}}>
                         {cat?.emoji} {p.nome}
@@ -877,7 +897,7 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias}){
               <div key={tipo} style={{marginBottom:14}}>
                 <div style={{fontSize:11,color:"#8888aa",fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>{tipo==="padaria"?"🥖 Padaria":"🛒 Mercadoria"}</div>
                 {categorias.filter(c=>c.tipo===tipo).map(c=>(
-                  <div key={c.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"#150c00",border:"1px solid #3d2200",marginBottom:5}}>
+                  <div key={c.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"#150c00",border:"1px solid #2a1a00",marginBottom:5}}>
                     <span style={{fontSize:13,color:"#f5e6c8"}}>{c.emoji} {c.nome}</span>
                     <span style={{fontSize:11,color:"#5a3a00"}}>{produtos.filter(p=>p.categoriaId===c.id).length} prod.</span>
                   </div>
@@ -926,7 +946,7 @@ function Historico({comandas,vendas}){
       {filtradas.length===0?<div style={{color:"#5a3a00",textAlign:"center",padding:40}}>Nenhuma venda ainda</div>:(
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {filtradas.map(v=>(
-            <div key={v.id} style={{padding:"12px 14px",borderRadius:10,background:"#150c00",border:"1px solid #3d2200",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div key={v.id} style={{padding:"12px 14px",borderRadius:10,background:"#150c00",border:"1px solid #2a1a00",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:2}}>
                   <span style={{fontWeight:700,color:"#f0f0f0",fontSize:13}}>
@@ -954,7 +974,7 @@ function Historico({comandas,vendas}){
 
 
 // ─── IMPRESSÃO DE CUPOM (ESC/POS via Print Window) ───────────────────────────
-const gerarCupom = (venda, nomeEstabelecimento="🥖 PadariaSystem") => {
+const gerarCupom = (venda, nomeEstabelecimento="PADARIA XV") => {
   const fmt2 = (v) => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
   const fmtKg2= (g) => g>=1000?(g/1000).toFixed(3)+" kg":g.toFixed(0)+"g";
   const linha = "--------------------------------";
@@ -1015,6 +1035,17 @@ const imprimirCupom = (venda, nomeEstabelecimento) => {
 };
 
 
+
+// ─── ESTILOS TABLET ──────────────────────────────────────────────────────────
+const ST = {
+  card:    { background:"linear-gradient(145deg,#2a1800,#1f1000)", border:"1px solid #2a1a00", borderRadius:14, padding:16, boxShadow:"0 4px 16px rgba(0,0,0,0.4)" },
+  btnG:    { padding:"16px 20px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#c8860a,#e6a020)", color:"#1a0f00", fontWeight:800, fontSize:16, cursor:"pointer", fontFamily:"inherit", width:"100%", marginBottom:8 },
+  btnGVd:  { padding:"16px 20px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#1a5a00,#2a8a00)", color:"#b8ffb8", fontWeight:800, fontSize:16, cursor:"pointer", fontFamily:"inherit", width:"100%", marginBottom:8 },
+  btnGCz:  { padding:"16px 20px", borderRadius:12, border:"none", background:"linear-gradient(135deg,#5a1a00,#8a2a00)", color:"#ffb8b8", fontWeight:800, fontSize:16, cursor:"pointer", fontFamily:"inherit", width:"100%", marginBottom:8 },
+  inp:     { width:"100%", padding:"14px 16px", borderRadius:12, border:"1px solid #5a3a00", background:"#150c00", color:"#f5e6c8", fontSize:16, fontFamily:"inherit", outline:"none", boxSizing:"border-box" },
+  produto: (sel) => ({ padding:16, borderRadius:14, cursor:"pointer", userSelect:"none", position:"relative", textAlign:"center", minHeight:90, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", background:sel?"#2a1400":"#150c00", border:"2px solid "+(sel?"#c8860a":"#3d2200") }),
+};
+
 // ─── GESTÃO DE COMANDAS FÍSICAS ──────────────────────────────────────────────
 
 // Gera URL de QR Code para uma comanda
@@ -1023,30 +1054,147 @@ const qrUrlComanda = (codigo) =>
   encodeURIComponent("COMANDA:" + codigo);
 
 // Imprime lote de comandas com QR Code
-const imprimirLoteComandas = (comandas) => {
-  const win = window.open("", "_blank", "width=900,height=700");
+const imprimirLoteComandas = (comandas, nomeEstab="PADARIA XV", subtitulo="Apresente ao atendente") => {
+  const win = window.open("", "_blank", "width=1000,height=800");
   if (!win) return;
+
   const itens = comandas.map(c => `
     <div class="comanda">
-      <div class="titulo">🥖 PadariaSystem</div>
+      <div class="header-comanda">
+        <span class="logo-icon">🥖</span>
+        <span class="nome-estab">${nomeEstab}</span>
+      </div>
       <div class="numero">${c.codigo}</div>
-      <img src="${qrUrlComanda(c.codigo)}" width="110" height="110" />
-      <div class="sub">Apresente ao atendente</div>
+      <div class="qr-wrap">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent("COMANDA:"+c.codigo)}" width="130" height="130" />
+      </div>
+      <div class="sub">${subtitulo}</div>
+      <div class="linha-pontilhada">- - - - - - - - - - - - - -</div>
     </div>
   `).join("");
-  win.document.write(`
-    <html><head><title>Comandas</title>
+
+  win.document.write(`<!DOCTYPE html>
+    <html><head>
+    <meta charset="UTF-8">
+    <title>Comandas - ${nomeEstab}</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; background: #fff; }
-      .grade { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
-      .comanda { width: 130px; border: 2px dashed #8B4513; border-radius: 8px; padding: 8px; text-align: center; break-inside: avoid; }
-      .titulo { font-size: 9px; font-weight: bold; color: #8B4513; }
-      .numero { font-size: 28px; font-weight: 900; color: #2d1a00; margin: 4px 0; }
-      .sub { font-size: 8px; color: #666; margin-top: 4px; }
-      @media print { button { display:none; } }
-    </style></head>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Arial', sans-serif;
+        background: #f5f0e8;
+        padding: 16px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 16px;
+        background: #2d1a00;
+        padding: 12px 16px;
+        border-radius: 10px;
+      }
+      .toolbar h2 { color: #f0c040; font-size: 16px; flex:1; }
+      .toolbar button {
+        padding: 8px 18px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+      }
+      .btn-print { background: #c8860a; color: #fff; }
+      .btn-info  { background: #1a5a00; color: #b8ffb8; }
+      .info-box {
+        background: #fff8e8;
+        border: 1px solid #c8860a;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 14px;
+        font-size: 12px;
+        color: #5a3a00;
+      }
+      .grade {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+      }
+      .comanda {
+        background: #ffffff;
+        border: 2px dashed #c8860a;
+        border-radius: 10px;
+        padding: 12px 10px 8px;
+        text-align: center;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      }
+      .header-comanda {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        margin-bottom: 4px;
+      }
+      .logo-icon { font-size: 14px; }
+      .nome-estab {
+        font-size: 10px;
+        font-weight: bold;
+        color: #8B4513;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .numero {
+        font-size: 36px;
+        font-weight: 900;
+        color: #2d1a00;
+        letter-spacing: 2px;
+        margin: 4px 0;
+        font-family: 'Courier New', monospace;
+      }
+      .qr-wrap {
+        display: flex;
+        justify-content: center;
+        margin: 6px 0;
+        background: #fff;
+        border-radius: 6px;
+        padding: 4px;
+        border: 1px solid #f0e8d0;
+      }
+      .qr-wrap img { display: block; }
+      .sub {
+        font-size: 9px;
+        color: #8B4513;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 6px;
+      }
+      .linha-pontilhada {
+        font-size: 9px;
+        color: #ddd;
+        margin-top: 6px;
+        overflow: hidden;
+      }
+
+      @media print {
+        body { background: #fff; padding: 8px; }
+        .toolbar { display: none; }
+        .info-box { display: none; }
+        .comanda { box-shadow: none; border-color: #aaa; }
+        .grade { gap: 8px; }
+      }
+      @page { margin: 10mm; }
+    </style>
+    </head>
     <body>
-      <button onclick="window.print()" style="margin:10px;padding:8px 20px;font-size:14px;cursor:pointer;background:#c8860a;color:#fff;border:none;border-radius:6px;">🖨️ Imprimir Comandas</button>
+      <div class="toolbar">
+        <h2>🎫 Catálogo de Comandas — ${nomeEstab} (${comandas.length} unidades)</h2>
+        <button class="btn-info" onclick="this.closest('.toolbar').nextElementSibling.style.display=this.closest('.toolbar').nextElementSibling.style.display==='none'?'block':'none'">ℹ️ Instruções</button>
+        <button class="btn-print" onclick="window.print()">🖨️ Imprimir Tudo</button>
+      </div>
+      <div class="info-box">
+        <strong>📋 Instruções de uso:</strong> Imprima esta página em papel A4 · Recorte cada comanda pela linha pontilhada · Entregue uma comanda física para cada cliente · O atendente digita ou escaneia o número para abrir o pedido no sistema.
+      </div>
       <div class="grade">${itens}</div>
     </body></html>
   `);
@@ -1317,6 +1465,195 @@ function GestaoComandas({ setToast }) {
   );
 }
 
+
+// ─── PDV TABLET (modo atendente otimizado) ───────────────────────────────────
+function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast }) {
+  const [etapa, setEtapa]           = useState("comanda");  // comanda | pedido | pagamento
+  const [codComanda, setCodComanda] = useState("");
+  const [comandaAtiva, setComandaAtiva] = useState(null);    // {codigo, tipo, mesa, nomeCliente}
+  const [carrinho, setCarrinho]     = useState([]);
+  const [catFiltro, setCatFiltro]   = useState(0);
+  const [busca, setBusca]           = useState("");
+  const [modalPag, setModalPag]     = useState(false);
+
+  const total = carrinho.reduce((s,i) => s + (i.vendaPeso ? i.total : i.preco*i.qtd), 0);
+
+  // Etapa 1: identificar comanda
+  const abrirComanda = () => {
+    const cod = codComanda.trim().toUpperCase();
+    if (!cod) return;
+    setComandaAtiva({ codigo: cod, tipo: "balcao", mesa: null, nomeCliente: "" });
+    setEtapa("pedido");
+    setCodComanda("");
+  };
+
+  const abrirMesa = (n) => {
+    setComandaAtiva({ codigo: "MESA-" + n, tipo: "mesa", mesa: n, nomeCliente: "" });
+    setEtapa("pedido");
+  };
+
+  // Adicionar item
+  const addItem = (prod) => {
+    if (prod.vendaPeso) { setToast({msg:"⚖️ Produto pesável — use o PDV principal",tipo:"info"}); return; }
+    setCarrinho(c => {
+      const ex = c.find(i => i.id===prod.id);
+      if (ex) return c.map(i => i.id===prod.id ? {...i,qtd:i.qtd+1} : i);
+      return [...c, {...prod, uid:uid(), qtd:1}];
+    });
+    setToast({msg:"✅ "+prod.nome,tipo:"ok"});
+  };
+
+  const removeItem = (itemUid) =>
+    setCarrinho(c => c.map(i => i.uid===itemUid?{...i,qtd:Math.max(0,i.qtd-1)}:i).filter(i=>i.qtd>0));
+
+  // Finalizar
+  const finalizar = (pagamentos) => {
+    const venda = {
+      id:uid(), mesa:comandaAtiva.mesa||"Balcão", itens:[...carrinho],
+      status:"fechada", hora:now(), data:today(),
+      totalFinal:total, pagamentos,
+      nomeCliente:comandaAtiva.nomeCliente||"Consumidor",
+      tipo:comandaAtiva.tipo, codigoComanda:comandaAtiva.codigo,
+    };
+    if (comandaAtiva.tipo==="mesa") setComandas(cs=>[...cs,venda]);
+    else setVendas(vs=>[...vs,{...venda,total}]);
+    imprimirCupom(venda);
+    setToast({msg:"🎉 Venda finalizada — "+fmt(total),tipo:"ok"});
+    setCarrinho([]); setComandaAtiva(null); setEtapa("comanda"); setModalPag(false);
+  };
+
+  const cats = categorias.filter(c=>catFiltro===0||c.id===catFiltro);
+  const prods = produtos.filter(p=>
+    p.disponivel &&
+    (catFiltro===0 || p.categoriaId===catFiltro) &&
+    (busca===""||p.nome.toLowerCase().includes(busca.toLowerCase()))
+  );
+
+  // ── ETAPA 1: COMANDA ──
+  if (etapa==="comanda") return (
+    <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:600,margin:"0 auto"}}>
+      <div style={ST.card}>
+        <div style={{...S.sT(),...{fontSize:18,marginBottom:20}}}>🎫 Identificar Comanda</div>
+
+        {/* Digitar código */}
+        <div style={{marginBottom:20}}>
+          <label style={{...S.lbl,fontSize:14}}>Código da comanda (digitar)</label>
+          <input
+            style={{...ST.inp,fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:4}}
+            placeholder="Ex: 042"
+            value={codComanda}
+            onChange={e=>setCodComanda(e.target.value.toUpperCase())}
+            onKeyDown={e=>e.key==="Enter"&&abrirComanda()}
+            autoFocus
+          />
+          <button style={{...ST.btnG,marginTop:10}} onClick={abrirComanda} disabled={!codComanda.trim()}>
+            ✅ Abrir Comanda
+          </button>
+        </div>
+
+        <div style={{textAlign:"center",color:"#5a3a00",margin:"10px 0"}}>— ou selecione a mesa —</div>
+
+        {/* Grade de mesas */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+          {Array.from({length:12},(_,i)=>i+1).map(n=>{
+            const aberta=comandas.find(c=>c.mesa===n&&c.status==="aberta");
+            return(
+              <button key={n} onClick={()=>abrirMesa(n)} style={{
+                padding:"18px 0",borderRadius:12,fontFamily:"inherit",fontWeight:800,
+                fontSize:20,cursor:"pointer",border:"2px solid "+(aberta?"#c8860a":"#3d2200"),
+                background:aberta?"#2a1500":"#150c00",color:aberta?"#f0a020":"#c8a060",
+              }}>
+                {n}
+                <div style={{fontSize:10,opacity:0.7,marginTop:2}}>{aberta?"● ativo":"○ livre"}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── ETAPA 2: LANÇAR PEDIDOS ──
+  if (etapa==="pedido") return (
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {modalPag&&<ModalPagamento total={total} onConfirmar={finalizar} onFechar={()=>setModalPag(false)} />}
+
+      {/* Cabeçalho da comanda ativa */}
+      <div style={{...ST.card,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:22,fontWeight:900,color:"#f0c040"}}>
+            {comandaAtiva.tipo==="mesa"?"🍽️ Mesa "+comandaAtiva.mesa:"🎫 Comanda "+comandaAtiva.codigo}
+          </div>
+          <div style={{fontSize:13,color:"#c8a060"}}>Toque nos produtos para adicionar</div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...S.btnS,fontSize:13}} onClick={()=>{setCarrinho([]);setComandaAtiva(null);setEtapa("comanda");}}>
+            ← Voltar
+          </button>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 280px",gap:12,minHeight:"60vh"}}>
+        {/* Cardápio */}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <input style={ST.inp} placeholder="🔍 Buscar produto..." value={busca} onChange={e=>setBusca(e.target.value)} />
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <span style={catFiltro===0?S.tagA:S.tag} onClick={()=>setCatFiltro(0)}>Todos</span>
+            {categorias.map(c=><span key={c.id} style={catFiltro===c.id?S.tagA:S.tag} onClick={()=>setCatFiltro(c.id)}>{c.emoji} {c.nome}</span>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+            {prods.map(p=>{
+              const cat=categorias.find(c=>c.id===p.categoriaId);
+              const qtd=carrinho.find(i=>i.id===p.id)?.qtd||0;
+              return(
+                <div key={p.id} onClick={()=>addItem(p)} style={ST.produto(qtd>0)}>
+                  {qtd>0&&<div style={{position:"absolute",top:6,right:6,background:"#c8860a",color:"#1a0f00",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900}}>{qtd}</div>}
+                  <div style={{fontSize:28,marginBottom:4}}>{cat?.emoji||"🍞"}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#f5e6c8",lineHeight:1.3}}>{p.nome}</div>
+                  <div style={{fontSize:13,fontWeight:800,color:"#f0c040",marginTop:3}}>{fmt(p.preco)}{p.vendaPeso?" /kg":""}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Carrinho lateral */}
+        <div style={{...ST.card,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{...S.sT(),...{fontSize:15}}}>🧺 Pedido</div>
+          <div style={{flex:1,overflowY:"auto",maxHeight:"45vh"}}>
+            {carrinho.length===0
+              ?<div style={{color:"#5a3a00",textAlign:"center",padding:20,fontSize:13}}>Nenhum item</div>
+              :carrinho.map(item=>(
+                <div key={item.uid} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #3d2200"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,color:"#f5e6c8"}}>{item.nome}</div>
+                    <div style={{fontSize:11,color:"#c8860a"}}>{fmt(item.preco)} × {item.qtd}</div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <button style={{...S.btnD,padding:"4px 10px",fontSize:16}} onClick={()=>removeItem(item.uid)}>−</button>
+                    <span style={{color:"#f0c040",fontWeight:800,minWidth:20,textAlign:"center"}}>{item.qtd}</span>
+                    <button style={{...S.btnS,padding:"4px 10px",fontSize:16}} onClick={()=>addItem(item)}>+</button>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+          {carrinho.length>0&&(
+            <div style={{borderTop:"2px solid #c8860a",paddingTop:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:900,color:"#f0c040",marginBottom:12}}>
+                <span>Total</span><span>{fmt(total)}</span>
+              </div>
+              <button style={ST.btnGVd} onClick={()=>setModalPag(true)}>💳 Finalizar</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return null;
+}
+
 // ─── GESTÃO DE USUÁRIOS ───────────────────────────────────────────────────────
 const PERFIS = {
   admin:     { label:"Administrador", cor:"#f0c040", desc:"Acesso total ao sistema" },
@@ -1439,7 +1776,7 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
             <thead>
               <tr>
                 {["Funcionalidade","Administrador","Caixa","Atendente"].map(h=>(
-                  <th key={h} style={{padding:"10px 14px",textAlign:"left",borderBottom:"2px solid #c8860a",color:h==="Funcionalidade"?"#c8a060":"#f0c040",fontWeight:700}}>{h}</th>
+                  <th key={h} style={{padding:"10px 14px",textAlign:"left",borderBottom:"2px solid #c8a020",color:h==="Funcionalidade"?"#c8a060":"#f0c040",fontWeight:700}}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1696,7 +2033,7 @@ function FechamentoCaixa({comandas,vendas,setToast}){
           <div style={S.sT()}>🔒 Histórico de Fechamentos</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {[...caixasFechados].reverse().map(c=>(
-              <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderRadius:10,background:"#150c00",border:"1px solid #3d2200"}}>
+              <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderRadius:10,background:"#150c00",border:"1px solid #2a1a00"}}>
                 <div>
                   <div style={{fontWeight:700,color:"#f5e6c8",fontSize:13}}>Fechamento — {c.data} às {c.hora}</div>
                   <div style={{fontSize:11,color:"#c8a060",marginTop:2}}>{c.qtdVendas} vendas · Dinheiro: {fmt(c.totalDinheiro)} · Pix: {fmt(c.totalPix)}</div>
@@ -1830,6 +2167,7 @@ export default function App(){
     {key:"estoque",label:"📦 Estoque"+(estBaixo>0?" ⚠️":"")},
     {key:"cadastro",label:"⚙️ Cadastro"},
     {key:"historico",label:"🧾 Histórico"},
+    {key:"tablet",label:"📱 Atendente"},
     {key:"comandas",label:"🎫 Comandas"},
     {key:"usuarios",label:"👥 Usuários"},
     {key:"caixa",label:"🔒 Caixa"},
@@ -1848,8 +2186,8 @@ export default function App(){
       `}</style>
       <header style={S.header}>
         <div style={S.logo}>
-          <span style={{background:"linear-gradient(135deg,#c8860a,#e6a020)",borderRadius:8,padding:"3px 8px",fontSize:16}}>🥖🛒</span>
-          <span>PADARIA XV <span style={{fontSize:12,color:"#c8a060",fontWeight:400}}>PDV + Comanda Digital</span></span>
+          <span style={{background:"linear-gradient(135deg,#c8860a,#f0c040)",borderRadius:"50%",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 2px 8px rgba(200,134,10,0.5)"}}>🍞</span>
+          <span style={{display:"flex",alignItems:"center",gap:8,fontFamily:"Georgia,serif"}}><span style={{fontSize:19,fontWeight:900,color:"#f5e6c8",letterSpacing:2}}>PADARIA</span><span style={{fontSize:19,fontWeight:900,color:"#f0c040",letterSpacing:3,borderLeft:"2px solid #c8860a",borderRight:"2px solid #c8860a",padding:"0 10px",margin:"0 3px"}}>XV</span><span style={{fontSize:11,color:"#c8a060",fontWeight:400,marginLeft:4}}>PDV + Comanda Digital</span></span>
         </div>
         <nav style={{display:"flex",gap:4}}>
           {abas.map(n=>(
@@ -1864,6 +2202,7 @@ export default function App(){
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
+        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} />}
         {aba==="comandas" &&<GestaoComandas setToast={setToast} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
         {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} vendas={vendas} setToast={setToast} />}
