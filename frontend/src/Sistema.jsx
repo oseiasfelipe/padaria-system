@@ -1014,6 +1014,309 @@ const imprimirCupom = (venda, nomeEstabelecimento) => {
   setTimeout(()=>win.print(), 500);
 };
 
+
+// ─── GESTÃO DE COMANDAS FÍSICAS ──────────────────────────────────────────────
+
+// Gera URL de QR Code para uma comanda
+const qrUrlComanda = (codigo) =>
+  "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" +
+  encodeURIComponent("COMANDA:" + codigo);
+
+// Imprime lote de comandas com QR Code
+const imprimirLoteComandas = (comandas) => {
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+  const itens = comandas.map(c => `
+    <div class="comanda">
+      <div class="titulo">🥖 PadariaSystem</div>
+      <div class="numero">${c.codigo}</div>
+      <img src="${qrUrlComanda(c.codigo)}" width="110" height="110" />
+      <div class="sub">Apresente ao atendente</div>
+    </div>
+  `).join("");
+  win.document.write(`
+    <html><head><title>Comandas</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #fff; }
+      .grade { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
+      .comanda { width: 130px; border: 2px dashed #8B4513; border-radius: 8px; padding: 8px; text-align: center; break-inside: avoid; }
+      .titulo { font-size: 9px; font-weight: bold; color: #8B4513; }
+      .numero { font-size: 28px; font-weight: 900; color: #2d1a00; margin: 4px 0; }
+      .sub { font-size: 8px; color: #666; margin-top: 4px; }
+      @media print { button { display:none; } }
+    </style></head>
+    <body>
+      <button onclick="window.print()" style="margin:10px;padding:8px 20px;font-size:14px;cursor:pointer;background:#c8860a;color:#fff;border:none;border-radius:6px;">🖨️ Imprimir Comandas</button>
+      <div class="grade">${itens}</div>
+    </body></html>
+  `);
+  win.document.close();
+};
+
+function GestaoComandas({ setToast }) {
+  // Estado das comandas físicas
+  const [comandasFisicas, setComandasFisicas] = useState(() => {
+    // Gera 50 comandas iniciais (001-050)
+    return Array.from({ length: 50 }, (_, i) => ({
+      codigo: String(i + 1).padStart(3, "0"),
+      status: "livre",       // "livre" | "em_uso" | "paga"
+      pedidos: [],
+      mesa: null,
+      nomeCliente: "",
+      abertoEm: null,
+    }));
+  });
+
+  const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [buscaCodigo, setBuscaCodigo]   = useState("");
+  const [comandaSel, setComandaSel]     = useState(null);  // comanda selecionada para ver
+  const [modalGerar, setModalGerar]     = useState(false);
+  const [qtdGerar, setQtdGerar]         = useState(10);
+  const [prefixo, setPrefixo]           = useState("");
+  const [modalAbrir, setModalAbrir]     = useState(false); // modal para abrir comanda no PDV
+  const [codBusca, setCodBusca]         = useState("");
+  const cbRef = useRef();
+
+  // Stats
+  const livres  = comandasFisicas.filter(c => c.status === "livre").length;
+  const emUso   = comandasFisicas.filter(c => c.status === "em_uso").length;
+  const pagas   = comandasFisicas.filter(c => c.status === "paga").length;
+
+  const filtradas = comandasFisicas.filter(c => {
+    const matchStatus = filtroStatus === "todos" || c.status === filtroStatus;
+    const matchBusca  = !buscaCodigo || c.codigo.includes(buscaCodigo.toUpperCase());
+    return matchStatus && matchBusca;
+  });
+
+  // Gerar novo lote
+  const gerarLote = () => {
+    const existentes = new Set(comandasFisicas.map(c => c.codigo));
+    const novas = [];
+    for (let i = 1; novas.length < qtdGerar; i++) {
+      const cod = prefixo + String(i).padStart(3, "0");
+      if (!existentes.has(cod)) {
+        novas.push({ codigo: cod, status: "livre", pedidos: [], mesa: null, nomeCliente: "", abertoEm: null });
+        existentes.add(cod);
+      }
+    }
+    setComandasFisicas(c => [...c, ...novas]);
+    setToast({ msg: "✅ " + novas.length + " comandas geradas!", tipo: "ok" });
+    setModalGerar(false);
+  };
+
+  // Abrir comanda por código (escanear ou digitar)
+  const abrirPorCodigo = (cod) => {
+    const idx = comandasFisicas.findIndex(c => c.codigo === cod.replace("COMANDA:", "").trim().toUpperCase());
+    if (idx === -1) { setToast({ msg: "❌ Comanda " + cod + " não encontrada", tipo: "err" }); return; }
+    const c = comandasFisicas[idx];
+    if (c.status === "paga") { setToast({ msg: "⚠️ Comanda " + cod + " já foi paga e fechada", tipo: "err" }); return; }
+    setComandaSel(c);
+    setModalAbrir(false);
+    setCodBusca("");
+  };
+
+  // Marcar como em uso
+  const marcarEmUso = (codigo, nomeCliente = "", mesa = null) => {
+    setComandasFisicas(cs => cs.map(c =>
+      c.codigo === codigo
+        ? { ...c, status: "em_uso", nomeCliente, mesa, abertoEm: now() }
+        : c
+    ));
+  };
+
+  // Marcar como paga/fechada
+  const fecharComanda = (codigo) => {
+    setComandasFisicas(cs => cs.map(c =>
+      c.codigo === codigo ? { ...c, status: "paga" } : c
+    ));
+    setComandaSel(null);
+    setToast({ msg: "✅ Comanda " + codigo + " fechada!", tipo: "ok" });
+  };
+
+  // Liberar comanda (reset)
+  const liberarComanda = (codigo) => {
+    setComandasFisicas(cs => cs.map(c =>
+      c.codigo === codigo
+        ? { ...c, status: "livre", pedidos: [], mesa: null, nomeCliente: "", abertoEm: null }
+        : c
+    ));
+    setToast({ msg: "🔓 Comanda " + codigo + " liberada", tipo: "ok" });
+  };
+
+  const corStatus = { livre: "#8aee3a", em_uso: "#f0c040", paga: "#ff6a6a" };
+  const labelStatus = { livre: "Livre", em_uso: "Em uso", paga: "Paga" };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+        {[
+          { l: "Total de Comandas", v: comandasFisicas.length, i: "🎫", c: "#c8a060" },
+          { l: "Disponíveis",       v: livres,  i: "🟢", c: "#8aee3a" },
+          { l: "Em uso",            v: emUso,   i: "🟡", c: "#f0c040" },
+          { l: "Pagas/Fechadas",    v: pagas,   i: "🔴", c: "#ff6a6a" },
+        ].map(k => (
+          <div key={k.l} style={{ ...S.card, textAlign: "center" }}>
+            <div style={{ fontSize: 28, marginBottom: 5 }}>{k.i}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: k.c }}>{k.v}</div>
+            <div style={{ fontSize: 11, color: "#c8a060", marginTop: 3 }}>{k.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Barra de ações */}
+      <div style={{ ...S.card, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        {/* Scanner / busca rápida */}
+        <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
+          <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>📷</span>
+          <input
+            ref={cbRef}
+            style={{ ...S.inp, paddingLeft: 34, background: "#150c00", border: "2px solid #c8860a", color: "#f0c040", fontSize: 15, fontWeight: 700, letterSpacing: 2 }}
+            placeholder="Escanear ou digitar código da comanda..."
+            value={codBusca}
+            onChange={e => setCodBusca(e.target.value.toUpperCase())}
+            onKeyDown={e => { if (e.key === "Enter" && codBusca.trim()) abrirPorCodigo(codBusca.trim()); }}
+            autoFocus
+          />
+        </div>
+        <button style={S.btnP} onClick={() => codBusca.trim() && abrirPorCodigo(codBusca.trim())}>🔍 Abrir Comanda</button>
+        <button style={S.btnGr} onClick={() => setModalGerar(true)}>➕ Gerar Comandas</button>
+        <button style={S.btnS} onClick={() => imprimirLoteComandas(comandasFisicas.filter(c => c.status === "livre"))}>🖨️ Imprimir Livres</button>
+        <button style={S.btnS} onClick={() => imprimirLoteComandas(filtradas)}>🖨️ Imprimir Seleção</button>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ color: "#c8a060", fontSize: 13 }}>Filtrar:</span>
+        {["todos", "livre", "em_uso", "paga"].map(s => (
+          <span key={s} style={filtroStatus === s ? S.tagA : S.tag} onClick={() => setFiltroStatus(s)}>
+            {s === "todos" ? "Todas" : labelStatus[s]}
+          </span>
+        ))}
+        <input style={{ ...S.inp, width: 160, marginLeft: "auto" }} placeholder="Buscar nº..." value={buscaCodigo} onChange={e => setBuscaCodigo(e.target.value)} />
+      </div>
+
+      {/* Grade de comandas */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: 10 }}>
+        {filtradas.map(c => (
+          <div key={c.codigo} onClick={() => setComandaSel(c)} style={{
+            padding: "12px 8px", borderRadius: 12, cursor: "pointer", textAlign: "center", userSelect: "none",
+            background: c.status === "em_uso" ? "#2a1a00" : c.status === "paga" ? "#1a0000" : "#150c00",
+            border: "2px solid " + (corStatus[c.status] + "55"),
+            transition: "all 0.15s",
+          }}>
+            <div style={{ fontSize: 24, fontWeight: 900, color: corStatus[c.status], letterSpacing: 2 }}>{c.codigo}</div>
+            <div style={{ fontSize: 10, color: corStatus[c.status], marginTop: 3, fontWeight: 700 }}>{labelStatus[c.status]}</div>
+            {c.nomeCliente && <div style={{ fontSize: 10, color: "#c8a060", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nomeCliente}</div>}
+            {c.mesa && <div style={{ fontSize: 10, color: "#6ab8ff" }}>Mesa {c.mesa}</div>}
+            {c.abertoEm && <div style={{ fontSize: 9, color: "#5a3a00" }}>{c.abertoEm}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Modal detalhe da comanda */}
+      {comandaSel && (
+        <div style={S.overlay} onClick={() => setComandaSel(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(145deg,#2a1800,#150c00)", border: "2px solid #c8860a", borderRadius: 20, padding: 28, width: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.9)" }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 48, fontWeight: 900, color: corStatus[comandaSel.status], letterSpacing: 3 }}>{comandaSel.codigo}</div>
+              <div style={{ fontSize: 13, color: corStatus[comandaSel.status], fontWeight: 700 }}>{labelStatus[comandaSel.status]}</div>
+            </div>
+
+            {/* QR Code da comanda */}
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <div style={{ background: "#fff", padding: 10, borderRadius: 10 }}>
+                <img src={qrUrlComanda(comandaSel.codigo)} width={120} height={120} alt="QR" />
+              </div>
+            </div>
+
+            {/* Infos */}
+            {comandaSel.status === "em_uso" && (
+              <div style={{ background: "#150c00", borderRadius: 10, padding: 12, marginBottom: 14, border: "1px solid #3d2200" }}>
+                {comandaSel.nomeCliente && <div style={{ fontSize: 13, color: "#f5e6c8" }}>👤 {comandaSel.nomeCliente}</div>}
+                {comandaSel.mesa && <div style={{ fontSize: 13, color: "#6ab8ff" }}>🍽️ Mesa {comandaSel.mesa}</div>}
+                <div style={{ fontSize: 12, color: "#c8a060" }}>⏰ Aberta às {comandaSel.abertoEm}</div>
+              </div>
+            )}
+
+            {/* Campos para abrir comanda */}
+            {comandaSel.status === "livre" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: "#c8a060", textAlign: "center" }}>Preencha para vincular ao atendimento:</div>
+                <div>
+                  <label style={S.lbl}>Nome do cliente (opcional)</label>
+                  <input style={S.inp} placeholder="Ex: João Silva" onBlur={e => {
+                    setComandasFisicas(cs => cs.map(c => c.codigo === comandaSel.codigo ? { ...c, nomeCliente: e.target.value } : c));
+                    setComandaSel(cs => ({ ...cs, nomeCliente: e.target.value }));
+                  }} defaultValue={comandaSel.nomeCliente} />
+                </div>
+                <div>
+                  <label style={S.lbl}>Mesa (opcional)</label>
+                  <input style={S.inp} placeholder="Ex: 5" type="number" min="1" max="12" onBlur={e => {
+                    setComandasFisicas(cs => cs.map(c => c.codigo === comandaSel.codigo ? { ...c, mesa: e.target.value } : c));
+                    setComandaSel(cs => ({ ...cs, mesa: e.target.value }));
+                  }} defaultValue={comandaSel.mesa} />
+                </div>
+              </div>
+            )}
+
+            {/* Ações */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {comandaSel.status === "livre" && (
+                <button style={{ ...S.btnOk }} onClick={() => {
+                  marcarEmUso(comandaSel.codigo, comandaSel.nomeCliente, comandaSel.mesa);
+                  setToast({ msg: "✅ Comanda " + comandaSel.codigo + " em uso!", tipo: "ok" });
+                  setComandaSel(null);
+                }}>✅ Iniciar Atendimento</button>
+              )}
+              {comandaSel.status === "em_uso" && (
+                <>
+                  <button style={S.btnOk} onClick={() => fecharComanda(comandaSel.codigo)}>💳 Fechar e Pagar</button>
+                  <button style={{ ...S.btnS, fontSize: 12 }} onClick={() => {
+                    imprimirLoteComandas([comandaSel]);
+                    setToast({ msg: "🖨️ Imprimindo comanda " + comandaSel.codigo, tipo: "info" });
+                  }}>🖨️ Reimprimir QR Code</button>
+                </>
+              )}
+              {comandaSel.status === "paga" && (
+                <button style={S.btnS} onClick={() => { liberarComanda(comandaSel.codigo); }}>🔓 Liberar Comanda</button>
+              )}
+              <button style={{ ...S.btnS, marginTop: 4 }} onClick={() => setComandaSel(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal gerar comandas */}
+      {modalGerar && (
+        <div style={S.overlay} onClick={() => setModalGerar(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(145deg,#2a1800,#150c00)", border: "2px solid #c8860a", borderRadius: 20, padding: 28, width: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.9)" }}>
+            <div style={{ ...S.sT(), justifyContent: "center" }}>🎫 Gerar Lote de Comandas</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={S.lbl}>Prefixo (opcional)</label>
+                <input style={S.inp} placeholder='Ex: "A" → A001, A002...' value={prefixo} onChange={e => setPrefixo(e.target.value.toUpperCase())} maxLength={3} />
+              </div>
+              <div>
+                <label style={S.lbl}>Quantidade</label>
+                <input style={S.inp} type="number" min={1} max={200} value={qtdGerar} onChange={e => setQtdGerar(+e.target.value)} />
+              </div>
+              <div style={{ background: "#150c00", borderRadius: 10, padding: 12, border: "1px solid #3d2200", fontSize: 13, color: "#c8a060" }}>
+                Vai gerar: <strong style={{ color: "#f0c040" }}>{prefixo}{String(1).padStart(3,"0")}</strong> até <strong style={{ color: "#f0c040" }}>{prefixo}{String(qtdGerar).padStart(3,"0")}</strong>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={{ ...S.btnS, flex: 1 }} onClick={() => setModalGerar(false)}>Cancelar</button>
+                <button style={{ ...S.btnP, flex: 2 }} onClick={gerarLote}>✅ Gerar {qtdGerar} Comandas</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── GESTÃO DE USUÁRIOS ───────────────────────────────────────────────────────
 const PERFIS = {
   admin:     { label:"Administrador", cor:"#f0c040", desc:"Acesso total ao sistema" },
@@ -1527,6 +1830,7 @@ export default function App(){
     {key:"estoque",label:"📦 Estoque"+(estBaixo>0?" ⚠️":"")},
     {key:"cadastro",label:"⚙️ Cadastro"},
     {key:"historico",label:"🧾 Histórico"},
+    {key:"comandas",label:"🎫 Comandas"},
     {key:"usuarios",label:"👥 Usuários"},
     {key:"caixa",label:"🔒 Caixa"},
     {key:"relatorio",label:"📊 Relatório"},
@@ -1560,6 +1864,7 @@ export default function App(){
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
+        {aba==="comandas" &&<GestaoComandas setToast={setToast} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
         {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} vendas={vendas} setToast={setToast} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
