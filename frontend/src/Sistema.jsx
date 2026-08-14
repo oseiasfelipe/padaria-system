@@ -129,10 +129,129 @@ function ModalPesagem({produto,onConfirmar,onFechar}){
 }
 
 // ─── MODAL PAGAMENTO ─────────────────────────────────────────────────────────
+// ─── CONFIGURAÇÃO PIX DA PADARIA ─────────────────────────────────────────────
+// Altere aqui a chave Pix e nome da padaria
+const PIX_CONFIG = {
+  chave:       "",           // Ex: "11999998888" ou "padaria@email.com" ou "00.000.000/0001-00"
+  tipo:        "telefone",   // "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
+  nome:        "PADARIA",    // Nome que aparece no QR Code (max 25 chars)
+  cidade:      "SAO PAULO",  // Cidade
+};
+
+// Gera payload Pix (EMV/BR Code) para QR Code estático
+const gerarPixPayload = (chave, nome, cidade, valor) => {
+  const v = valor.toFixed(2);
+  const nomeF = nome.substring(0,25).toUpperCase().padEnd(25).substring(0,25).trim();
+  const cidadeF = cidade.substring(0,15).toUpperCase().trim();
+  const pixKey = chave;
+  const gui = "BR.GOV.BCB.PIX";
+  const pixInfo = "01" + pixKey.length.toString().padStart(2,"0") + pixKey;
+  const merchantInfo = "00" + gui.length.toString().padStart(2,"0") + gui + "01" + pixInfo.length.toString().padStart(2,"0") + pixInfo;
+  const fields = [
+    "000201",
+    "010212",
+    "26" + merchantInfo.length.toString().padStart(2,"0") + merchantInfo,
+    "52040000",
+    "5303986",
+    "54" + v.length.toString().padStart(2,"0") + v,
+    "5802BR",
+    "59" + nomeF.length.toString().padStart(2,"0") + nomeF,
+    "60" + cidadeF.length.toString().padStart(2,"0") + cidadeF,
+    "62070503***",
+    "6304",
+  ];
+  const payload = fields.join("");
+  // CRC16 CCITT
+  let crc = 0xFFFF;
+  for(let i=0;i<payload.length;i++){
+    crc ^= payload.charCodeAt(i)<<8;
+    for(let j=0;j<8;j++) crc=(crc&0x8000)?(crc<<1)^0x1021:(crc<<1);
+  }
+  return payload + (crc&0xFFFF).toString(16).toUpperCase().padStart(4,"0");
+};
+
+// QR Code via API pública (sem dependência)
+const QRCodeImg = ({valor,tamanho=200}) => {
+  const [qrSrc,setQrSrc] = useState("");
+  const [copiado,setCopiado] = useState(false);
+  const [pixConf,setPixConf] = useState({...PIX_CONFIG});
+  const [editando,setEditando] = useState(!PIX_CONFIG.chave);
+
+  const payload = pixConf.chave ? gerarPixPayload(pixConf.chave,pixConf.nome,pixConf.cidade,valor) : "";
+
+  useEffect(()=>{
+    if(!payload) return;
+    const url = "https://api.qrserver.com/v1/create-qr-code/?size="+tamanho+"x"+tamanho+"&data="+encodeURIComponent(payload);
+    setQrSrc(url);
+  },[payload,tamanho]);
+
+  const copiarCodigo = () => {
+    navigator.clipboard.writeText(payload).then(()=>{
+      setCopiado(true); setTimeout(()=>setCopiado(false),2000);
+    });
+  };
+
+  if(editando||!pixConf.chave) return(
+    <div style={{background:"#0d0d1a",borderRadius:12,padding:16,border:"1px solid #5a3a00"}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#f0c040",marginBottom:10}}>⚙️ Configure sua Chave Pix</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div>
+          <label style={S.lbl}>Tipo de chave</label>
+          <select style={S.inp} value={pixConf.tipo} onChange={e=>setPixConf(p=>({...p,tipo:e.target.value}))}>
+            <option value="telefone">📱 Celular (+5511...)</option>
+            <option value="cpf">👤 CPF (000.000.000-00)</option>
+            <option value="cnpj">🏢 CNPJ (00.000.000/0001-00)</option>
+            <option value="email">📧 Email</option>
+            <option value="aleatoria">🔑 Chave aleatória</option>
+          </select>
+        </div>
+        <div>
+          <label style={S.lbl}>Chave Pix</label>
+          <input style={S.inp} placeholder={pixConf.tipo==="telefone"?"+5511999998888":pixConf.tipo==="email"?"padaria@email.com":"Digite a chave"} value={pixConf.chave} onChange={e=>setPixConf(p=>({...p,chave:e.target.value}))} />
+        </div>
+        <div style={S.grid2}>
+          <div>
+            <label style={S.lbl}>Nome (max 25 chars)</label>
+            <input style={S.inp} placeholder="PADARIA XYZ" value={pixConf.nome} onChange={e=>setPixConf(p=>({...p,nome:e.target.value.substring(0,25)}))} />
+          </div>
+          <div>
+            <label style={S.lbl}>Cidade</label>
+            <input style={S.inp} placeholder="SAO PAULO" value={pixConf.cidade} onChange={e=>setPixConf(p=>({...p,cidade:e.target.value.substring(0,15)}))} />
+          </div>
+        </div>
+        <button style={S.btnP} disabled={!pixConf.chave} onClick={()=>setEditando(false)}>✅ Gerar QR Code</button>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+      <div style={{background:"#fff",padding:12,borderRadius:12,boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+        {qrSrc
+          ? <img src={qrSrc} width={tamanho} height={tamanho} alt="QR Code Pix" style={{display:"block"}} />
+          : <div style={{width:tamanho,height:tamanho,display:"flex",alignItems:"center",justifyContent:"center",color:"#333",fontSize:13}}>Gerando QR...</div>
+        }
+      </div>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:12,color:"#c8a060",marginBottom:4}}>Pix para: <strong style={{color:"#f0c040"}}>{pixConf.nome}</strong></div>
+        <div style={{fontSize:11,color:"#5a3a00",marginBottom:8}}>{pixConf.chave}</div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...S.btnS,fontSize:12}} onClick={copiarCodigo}>{copiado?"✅ Copiado!":"📋 Copiar código"}</button>
+          <button style={{...S.btnS,fontSize:12}} onClick={()=>setEditando(true)}>⚙️ Alterar chave</button>
+        </div>
+      </div>
+      <div style={{background:"#0d1f0d",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#8aee3a",textAlign:"center",border:"1px solid #1a4a1a"}}>
+        ⏳ Aguardando confirmação do pagamento...
+      </div>
+    </div>
+  );
+};
+
 function ModalPagamento({total,onConfirmar,onFechar}){
   const [pagamentos,setPagamentos]=useState([]);
   const [forma,setForma]=useState("dinheiro");
   const [valor,setValor]=useState("");
+  const [mostraPix,setMostraPix]=useState(false);
   const pago=pagamentos.reduce((s,p)=>s+p.valor,0);
   const restante=total-pago;
   const troco=forma==="dinheiro"&&valor?(+valor-restante):null;
@@ -143,7 +262,9 @@ function ModalPagamento({total,onConfirmar,onFechar}){
     const aplicado=Math.min(v,restante);
     setPagamentos(p=>[...p,{forma,valor:aplicado,recebido:+valor||aplicado}]);
     setValor("");
+    setMostraPix(false);
   };
+  const selecionarForma=(f)=>{ setForma(f); setMostraPix(f==="pix"); };
   const concluir=()=>{ if(pago<total-0.01)return; onConfirmar(pagamentos); };
 
   const icones={dinheiro:"💵",pix:"📱",debito:"💳",credito:"💳",vale:"🎫"};
@@ -151,10 +272,10 @@ function ModalPagamento({total,onConfirmar,onFechar}){
 
   return(
     <div style={S.overlay} onClick={onFechar}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #4a8a00",borderRadius:18,padding:28,width:420,boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #4a8a00",borderRadius:18,padding:28,width:mostraPix?480:420,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
         <div style={{textAlign:"center",marginBottom:20}}>
-          <div style={{fontSize:36,marginBottom:6}}>💳</div>
-          <div style={{fontSize:17,fontWeight:800,color:"#8aee3a"}}>Pagamento</div>
+          <div style={{fontSize:36,marginBottom:6}}>{mostraPix?"📱":"💳"}</div>
+          <div style={{fontSize:17,fontWeight:800,color:"#8aee3a"}}>{mostraPix?"Pagamento via Pix":"Pagamento"}</div>
           <div style={{fontSize:22,fontWeight:900,color:"#f0c040",marginTop:4}}>Total: {fmt(total)}</div>
         </div>
 
@@ -162,8 +283,8 @@ function ModalPagamento({total,onConfirmar,onFechar}){
           <div style={{background:"#1a0c00",borderRadius:10,padding:12,marginBottom:14,border:"1px solid #4a3000"}}>
             {pagamentos.map((p,i)=>(
               <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                <span style={{color:"#aaaacc"}}>{icones[p.forma]} {nomes[p.forma]}</span>
-                <span style={{color:"#6aff6a",fontWeight:700}}>{fmt(p.valor)}</span>
+                <span style={{color:"#c8a060"}}>{icones[p.forma]} {nomes[p.forma]}</span>
+                <span style={{color:"#8aee3a",fontWeight:700}}>{fmt(p.valor)}</span>
               </div>
             ))}
             <div style={{borderTop:"1px solid #4a3000",paddingTop:8,display:"flex",justifyContent:"space-between",fontWeight:700}}>
@@ -174,23 +295,42 @@ function ModalPagamento({total,onConfirmar,onFechar}){
         )}
 
         {restante>0.01&&(<>
-          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:12}}>
+          {/* Seletor de forma */}
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:14}}>
             {Object.entries(nomes).map(([k,v])=>(
-              <span key={k} style={forma===k?S.tagA:S.tag} onClick={()=>setForma(k)}>{icones[k]} {v}</span>
+              <span key={k} style={forma===k?S.tagA:S.tag} onClick={()=>selecionarForma(k)}>{icones[k]} {v}</span>
             ))}
           </div>
-          <div style={{marginBottom:10}}>
-            <label style={S.lbl}>{forma==="dinheiro"?"Valor recebido":"Valor (deixe vazio para restante)"}</label>
-            <input style={S.inp} type="number" step="0.01" placeholder={fmt(restante)} value={valor} onChange={e=>setValor(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPagamento()} />
-            {troco!==null&&restante>0&&(
-              <div style={{marginTop:6,padding:"6px 10px",borderRadius:7,background:troco>=0?"#0d3a0d":"#3a0a0a",color:troco>=0?"#6aff6a":"#ff6a6a",fontSize:13,fontWeight:700}}>
-                {troco>=0?"💵 Troco: "+fmt(troco):"⚠️ Valor insuficiente"}
+
+          {/* QR CODE PIX */}
+          {mostraPix&&(
+            <div style={{marginBottom:14}}>
+              <QRCodeImg valor={restante} tamanho={200} />
+              <div style={{marginTop:12,display:"flex",gap:8}}>
+                <button style={{...S.btnGr,flex:1}} onClick={addPagamento}>
+                  ✅ Confirmar recebimento ({fmt(restante)})
+                </button>
               </div>
-            )}
-          </div>
-          <button style={{...S.btnGr,width:"100%",marginBottom:12}} onClick={addPagamento}>
-            + Adicionar {nomes[forma]}
-          </button>
+            </div>
+          )}
+
+          {/* OUTROS MÉTODOS */}
+          {!mostraPix&&(
+            <>
+              <div style={{marginBottom:10}}>
+                <label style={S.lbl}>{forma==="dinheiro"?"Valor recebido":"Valor (deixe vazio para restante)"}</label>
+                <input style={S.inp} type="number" step="0.01" placeholder={fmt(restante)} value={valor} onChange={e=>setValor(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPagamento()} />
+                {troco!==null&&restante>0&&(
+                  <div style={{marginTop:6,padding:"6px 10px",borderRadius:7,background:troco>=0?"#0d3a0d":"#3a0a0a",color:troco>=0?"#8aee3a":"#ff6a6a",fontSize:13,fontWeight:700}}>
+                    {troco>=0?"💵 Troco: "+fmt(troco):"⚠️ Valor insuficiente"}
+                  </div>
+                )}
+              </div>
+              <button style={{...S.btnGr,width:"100%",marginBottom:12}} onClick={addPagamento}>
+                + Adicionar {nomes[forma]}
+              </button>
+            </>
+          )}
         </>)}
 
         <div style={{display:"flex",gap:8}}>
