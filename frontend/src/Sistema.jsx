@@ -628,8 +628,12 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     setComandas(cs=>cs.map(c=>c.id===comanda.id?{...c,status:"fechada",totalFinal:totalMesa,pagamentos,nomeCliente}:c));
     setToast({msg:"🎉 Mesa "+mesaSel+" fechada — "+fmt(totalMesa),tipo:"ok"});
     imprimirCupom({id:Date.now(),mesa:mesaSel,itens:comanda.itens,status:"fechada",hora:now(),data:today(),totalFinal:totalMesa,pagamentos,nomeCliente,tipo:"mesa"});
-    // Libera comanda física vinculada à mesa
-    setComandasFisicas(cs=>cs.map(cf=>cf.mesa===String(mesaSel)&&cf.status==="em_uso"?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf));
+    // Libera comanda física vinculada à mesa (por mesa OU por codigoComanda)
+    setComandasFisicas(cs=>cs.map(cf=>{
+      const porMesa   = cf.mesa===String(mesaSel)&&cf.status==="em_uso";
+      const porCodigo = comanda?.codigoComanda && cf.codigo===comanda.codigoComanda;
+      return (porMesa||porCodigo)?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf;
+    }));
     setMesaSel(null);setModalPag(false);
   };
 
@@ -637,8 +641,14 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}]);
     setToast({msg:"🛍️ Balcão finalizado — "+fmt(totalBalcao),tipo:"ok"});
     imprimirCupom({...{id:Date.now(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}});
-    // Libera comanda física que estava vinculada ao balcão
-    setComandasFisicas(cs=>cs.map(cf=>cf.tipo==="balcao"&&cf.status==="em_uso"&&cf.nomeCliente===(nomeCliente||"Consumidor")?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf));
+    // Libera comanda física vinculada ao balcão (por nome OU por comandaRapida)
+    const codVinculado = sessionStorage.getItem("ultima_comanda_balcao");
+    setComandasFisicas(cs=>cs.map(cf=>{
+      const porNome   = cf.status==="em_uso"&&cf.nomeCliente===(nomeCliente||"Consumidor")&&!cf.mesa;
+      const porCodigo = codVinculado && cf.codigo===codVinculado;
+      return (porNome||porCodigo)?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf;
+    }));
+    sessionStorage.removeItem("ultima_comanda_balcao");
     setCarrinho([]);setNomeCliente("");setModalPag(false);
   };
 
@@ -704,7 +714,10 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
             </div>
             {comanda&&(
               <div style={{...S.card,flex:1,display:"flex",flexDirection:"column",gap:8}}>
-                <div style={S.sT()}>📋 Mesa {mesaSel}</div>
+                <div style={S.sT()}>📋 Mesa {mesaSel}
+                {comanda?.codigoComanda&&<span style={{fontSize:11,color:"#8aee3a",marginLeft:8}}>🎫 {comanda.codigoComanda}</span>}
+                {comanda?.itens?.length>0&&<span style={{fontSize:11,color:"#f0c040",marginLeft:8}}>📤 Pedido do atendente</span>}
+              </div>
                 <div>
                   <label style={S.lbl}>👤 Nome do cliente</label>
                   <input style={S.inp} placeholder="Ex: João Silva..." value={nomeCliente} onChange={e=>setNomeCliente(e.target.value)} />
@@ -755,6 +768,21 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
         {modo==="balcao"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{...S.card,flex:1,display:"flex",flexDirection:"column",gap:8}}>
+              {/* Fila de pedidos do balcão enviados pelo atendente */}
+              {carrinho.length===0&&comandas.filter(c=>c.tipo==="balcao"&&c.status==="aberta"&&c.codigoComanda).length>0&&(
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#8aee3a",marginBottom:8}}>📤 Pedidos aguardando pagamento:</div>
+                  {comandas.filter(x=>x.tipo==="balcao"&&x.status==="aberta"&&x.codigoComanda).map(x=>(
+                    <div key={x.id} onClick={()=>{setCarrinho(x.itens||[]);setNomeCliente(x.nomeCliente||"");}} style={{padding:"8px 12px",borderRadius:8,background:"#0d2a0d",border:"1px solid #2a6a2a",cursor:"pointer",marginBottom:6}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}>
+                        <span style={{color:"#8aee3a",fontWeight:700}}>🎫 {x.codigoComanda} — {x.nomeCliente}</span>
+                        <span style={{color:"#f0c040",fontWeight:700}}>{fmt(x.totalParcial||0)}</span>
+                      </div>
+                      <div style={{fontSize:11,color:"#4a6a4a"}}>{x.hora} · {(x.itens||[]).length} itens · toque para cobrar</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div style={S.sT()}>🧺 Carrinho</div>
               <PainelItem itens={carrinho} isMesa={false} />
               {carrinho.length>0&&(
@@ -1248,6 +1276,109 @@ const imprimirLoteComandas = (comandas, nomeEstab="PADARIA XV", subtitulo="Apres
   win.document.close();
 };
 
+
+// ─── LEITOR DE STATUS DE COMANDA ─────────────────────────────────────────────
+function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComandaRapida, setToast }) {
+  const [cod, setCod]       = useState("");
+  const [resultado, setResultado] = useState(null);
+  const inputRef = useRef();
+
+  useEffect(()=>{ setTimeout(()=>inputRef.current?.focus(),100); },[]);
+
+  const consultar = (codigo) => {
+    const cod_limpo = codigo.replace("COMANDA:","").trim().toUpperCase();
+    if(!cod_limpo){ setResultado(null); return; }
+    const cf = comandasFisicas.find(c=>c.codigo===cod_limpo);
+    if(!cf){ setResultado({encontrada:false,codigo:cod_limpo}); return; }
+    setResultado({encontrada:true,...cf});
+    setCod("");
+  };
+
+  const corStatus = { livre:"#8aee3a", em_uso:"#f0c040", paga:"#ff6a6a" };
+  const labelStatus = { livre:"🟢 LIVRE", em_uso:"🟡 EM USO", paga:"🔴 PAGA" };
+
+  return (
+    <div style={{maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={S.card}>
+        <div style={S.sT()}>📷 Consultar Status da Comanda</div>
+        <label style={S.lbl}>Digite ou escaneie o código</label>
+        <div style={{display:"flex",gap:8}}>
+          <input ref={inputRef} style={{...S.inp,fontSize:20,fontWeight:700,textAlign:"center",letterSpacing:3,flex:1}}
+            placeholder="Ex: 042" value={cod}
+            onChange={e=>setCod(e.target.value.toUpperCase())}
+            onKeyDown={e=>{ if(e.key==="Enter") consultar(cod); }} />
+          <button style={S.btnP} onClick={()=>consultar(cod)}>🔍</button>
+        </div>
+      </div>
+
+      {resultado && (
+        <div style={{...S.card,border:"2px solid "+(resultado.encontrada?corStatus[resultado.status]||"#c8860a":"#ff6a6a")}}>
+          {!resultado.encontrada ? (
+            <div style={{textAlign:"center",padding:20}}>
+              <div style={{fontSize:40,marginBottom:8}}>❌</div>
+              <div style={{fontSize:18,fontWeight:700,color:"#ff6a6a"}}>Comanda {resultado.codigo} não encontrada</div>
+            </div>
+          ) : (
+            <div>
+              <div style={{textAlign:"center",marginBottom:16}}>
+                <div style={{fontSize:48,fontWeight:900,color:corStatus[resultado.status],letterSpacing:3,fontFamily:"Courier New,monospace"}}>
+                  {resultado.codigo}
+                </div>
+                <div style={{fontSize:20,fontWeight:700,color:corStatus[resultado.status],marginTop:4}}>
+                  {labelStatus[resultado.status]}
+                </div>
+              </div>
+
+              {resultado.status==="em_uso" && (
+                <div style={{background:"#150c00",borderRadius:10,padding:14,marginBottom:14,border:"1px solid #3d2200"}}>
+                  {resultado.nomeCliente&&<div style={{fontSize:13,color:"#f5e6c8",marginBottom:4}}>👤 {resultado.nomeCliente}</div>}
+                  {resultado.mesa&&<div style={{fontSize:13,color:"#6ab8ff",marginBottom:4}}>🍽️ Mesa {resultado.mesa}</div>}
+                  {resultado.abertoEm&&<div style={{fontSize:12,color:"#c8a060"}}>⏰ Aberta às {resultado.abertoEm}</div>}
+                </div>
+              )}
+
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {resultado.status==="livre" && (
+                  <button style={S.btnOk} onClick={()=>{
+                    if(setComandaRapida) setComandaRapida({codigo:resultado.codigo,nomeCliente:"",mesa:null,tipo:"balcao"});
+                    if(setAba) setAba("comanda");
+                    setResultado(null);
+                    setComandasFisicas(cs=>cs.map(cf=>cf.codigo===resultado.codigo?{...cf,status:"em_uso",abertoEm:now()}:cf));
+                    setToast({msg:"✅ Comanda "+resultado.codigo+" — iniciando atendimento",tipo:"ok"});
+                  }}>✅ Abrir e Iniciar Atendimento</button>
+                )}
+                {resultado.status==="em_uso" && (
+                  <>
+                    <button style={S.btnOk} onClick={()=>{
+                      if(setComandaRapida) setComandaRapida({codigo:resultado.codigo,nomeCliente:resultado.nomeCliente,mesa:resultado.mesa,tipo:resultado.mesa?"mesa":"balcao"});
+                      if(setAba) setAba("comanda");
+                      setResultado(null);
+                      setToast({msg:"🧺 Retomando comanda "+resultado.codigo,tipo:"ok"});
+                    }}>🧺 Continuar / Adicionar Itens</button>
+                    <button style={S.btnGr} onClick={()=>{
+                      if(setComandaRapida) setComandaRapida({codigo:resultado.codigo,nomeCliente:resultado.nomeCliente,mesa:resultado.mesa,tipo:"fechar"});
+                      if(setAba) setAba("comanda");
+                      setResultado(null);
+                    }}>💳 Ir para Pagamento</button>
+                  </>
+                )}
+                {resultado.status==="paga" && (
+                  <button style={S.btnS} onClick={()=>{
+                    setComandasFisicas(cs=>cs.map(cf=>cf.codigo===resultado.codigo?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf));
+                    setResultado(null);
+                    setToast({msg:"🔓 Comanda "+resultado.codigo+" liberada",tipo:"ok"});
+                  }}>🔓 Liberar Comanda</button>
+                )}
+                <button style={S.btnS} onClick={()=>setResultado(null)}>Fechar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba, setComandaRapida }) {
 
   const [filtroStatus, setFiltroStatus] = useState("todos");
@@ -1538,7 +1669,7 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
 
 
 // ─── PDV TABLET (modo atendente otimizado) ───────────────────────────────────
-function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast, setComandasFisicas=()=>{} }) {
+function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast, setComandasFisicas=()=>{}, comandasFisicas=[] }) {
   const [etapa, setEtapa]           = useState("comanda");  // comanda | pedido | pagamento
   const [codComanda, setCodComanda] = useState("");
   const [comandaAtiva, setComandaAtiva] = useState(null);    // {codigo, tipo, mesa, nomeCliente}
@@ -1587,7 +1718,7 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
       tipo:comandaAtiva.tipo, codigoComanda:comandaAtiva.codigo,
     };
     if (comandaAtiva.tipo==="mesa") setComandas(cs=>[...cs,venda]);
-    else setVendas(vs=>[...vs,{...venda,total}]);
+    else setVendas(vs=>[...vs,{...venda,total,origemTipo:"balcao"}]);
     imprimirCupom(venda);
     setToast({msg:"🎉 Venda finalizada — "+fmt(total),tipo:"ok"});
     // Libera comanda física pelo código
@@ -1606,40 +1737,94 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
 
   // ── ETAPA 1: COMANDA ──
   if (etapa==="comanda") return (
-    <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:600,margin:"0 auto"}}>
-      <div style={ST.card}>
-        <div style={{...S.sT(),...{fontSize:18,marginBottom:20}}}>🎫 Identificar Comanda</div>
+    <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:680,margin:"0 auto"}}>
 
-        {/* Digitar código */}
-        <div style={{marginBottom:20}}>
-          <label style={{...S.lbl,fontSize:14}}>Código da comanda (digitar)</label>
-          <input
-            style={{...ST.inp,fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:4}}
-            placeholder="Ex: 042"
-            value={codComanda}
-            onChange={e=>setCodComanda(e.target.value.toUpperCase())}
-            onKeyDown={e=>e.key==="Enter"&&abrirComanda()}
-            autoFocus
-          />
-          <button style={{...ST.btnG,marginTop:10}} onClick={abrirComanda} disabled={!codComanda.trim()}>
+      {/* Card principal — código da comanda */}
+      <div style={ST.card}>
+        <div style={{...S.sT(),...{fontSize:18,marginBottom:16}}}>🎫 Identificar Comanda</div>
+
+        {/* Campo código */}
+        <div style={{marginBottom:12}}>
+          <label style={{...S.lbl,fontSize:13}}>Digite ou escaneie o código da comanda</label>
+          <div style={{display:"flex",gap:8}}>
+            <input
+              style={{...ST.inp,fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:4,flex:1,
+                background:"#150c00",border:"2px solid #c8860a",color:"#f0c040"}}
+              placeholder="Ex: 042"
+              value={codComanda}
+              onChange={e=>setCodComanda(e.target.value.toUpperCase())}
+              onKeyDown={e=>e.key==="Enter"&&codComanda.trim()&&abrirComanda()}
+              autoFocus
+            />
+            <button style={{...ST.btnG,padding:"0 20px",fontSize:20}} onClick={abrirComanda} disabled={!codComanda.trim()}>
+              🔍
+            </button>
+          </div>
+        </div>
+
+        {/* Status da comanda digitada */}
+        {codComanda.length>=3&&(()=>{
+          const cf=comandasFisicas?.find(x=>x.codigo===codComanda);
+          if(!cf) return null;
+          const cores={livre:"#8aee3a",em_uso:"#f0c040",paga:"#ff6a6a"};
+          const labels={livre:"🟢 LIVRE — pode abrir",em_uso:"🟡 EM USO"+(cf.nomeCliente?" — "+cf.nomeCliente:"")+(cf.mesa?" (Mesa "+cf.mesa+")":""),paga:"🔴 PAGA — precisa liberar"};
+          return(
+            <div style={{padding:"8px 14px",borderRadius:9,background:"#0d0800",
+              border:"1px solid "+(cores[cf.status]||"#c8860a"),
+              color:cores[cf.status],fontSize:13,fontWeight:700,marginBottom:8}}>
+              {labels[cf.status]||cf.status}
+            </div>
+          );
+        })()}
+
+        {/* Botões de ação */}
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
+          <button style={{...ST.btnG,flex:1}} onClick={abrirComanda} disabled={!codComanda.trim()}>
             ✅ Abrir Comanda
+          </button>
+          <button style={{...ST.btnG,flex:1,background:"linear-gradient(135deg,#3a2000,#5a3400)",color:"#f0c040",border:"1px solid #c8860a"}}
+            onClick={()=>{
+              if(!codComanda.trim()) return;
+              const cf=comandasFisicas?.find(x=>x.codigo===codComanda);
+              if(cf?.status==="em_uso"){
+                setComandaAtiva({codigo:cf.codigo,tipo:cf.mesa?"mesa":"balcao",mesa:cf.mesa,nomeCliente:cf.nomeCliente});
+                setEtapa("pedido");
+                setCodComanda("");
+              }
+            }} disabled={!codComanda.trim()}>
+            🧺 Retomar Comanda
           </button>
         </div>
 
-        <div style={{textAlign:"center",color:"#5a3a00",margin:"10px 0"}}>— ou selecione a mesa —</div>
+        <div style={{textAlign:"center",color:"#5a3a00",fontSize:13,margin:"12px 0"}}>— ou escolha o tipo de atendimento —</div>
 
-        {/* Grade de mesas */}
+        {/* BALCÃO direto */}
+        <button
+          style={{...ST.btnG,width:"100%",marginBottom:12,background:"linear-gradient(135deg,#1a3a6a,#2a5aaa)",color:"#b8d8ff",fontSize:15,fontWeight:700,padding:14}}
+          onClick={()=>{
+            setComandaAtiva({codigo:"BAL-"+Date.now(),tipo:"balcao",mesa:null,nomeCliente:""});
+            setEtapa("pedido");
+          }}>
+          🛍️ Atendimento Balcão / Viagem (sem comanda física)
+        </button>
+      </div>
+
+      {/* Grade de mesas */}
+      <div style={ST.card}>
+        <div style={{...S.lbl,fontSize:13,marginBottom:10}}>🍽️ SELECIONAR MESA</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
           {Array.from({length:12},(_,i)=>i+1).map(n=>{
             const aberta=comandas.find(c=>c.mesa===n&&c.status==="aberta");
+            const cor=aberta?"#f0a020":"#c8a060";
             return(
               <button key={n} onClick={()=>abrirMesa(n)} style={{
-                padding:"18px 0",borderRadius:12,fontFamily:"inherit",fontWeight:800,
-                fontSize:20,cursor:"pointer",border:"2px solid "+(aberta?"#c8860a":"#3d2200"),
-                background:aberta?"#2a1500":"#150c00",color:aberta?"#f0a020":"#c8a060",
+                padding:"16px 0",borderRadius:12,fontFamily:"inherit",fontWeight:800,
+                fontSize:20,cursor:"pointer",transition:"all 0.15s",
+                border:"2px solid "+(aberta?"#c8860a":"#3d2200"),
+                background:aberta?"#2a1500":"#150c00",color:cor,
               }}>
                 {n}
-                <div style={{fontSize:10,opacity:0.7,marginTop:2}}>{aberta?"● ativo":"○ livre"}</div>
+                <div style={{fontSize:9,opacity:0.7,marginTop:2}}>{aberta?"● ativo":"○ livre"}</div>
               </button>
             );
           })}
@@ -1651,15 +1836,22 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
   // ── ETAPA 2: LANÇAR PEDIDOS ──
   if (etapa==="pedido") return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {modalPag&&<ModalPagamento total={total} onConfirmar={finalizar} onFechar={()=>setModalPag(false)} />}
+      {/* Pagamento é realizado pelo caixa — não pelo atendente */}
 
       {/* Cabeçalho da comanda ativa */}
       <div style={{...ST.card,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontSize:22,fontWeight:900,color:"#f0c040"}}>
-            {comandaAtiva.tipo==="mesa"?"🍽️ Mesa "+comandaAtiva.mesa:"🎫 Comanda "+comandaAtiva.codigo}
+            {comandaAtiva.tipo==="mesa"
+              ?"🍽️ Mesa "+comandaAtiva.mesa
+              :comandaAtiva.codigo.startsWith("BAL-")
+                ?"🛍️ Balcão / Viagem"
+                :"🎫 Comanda "+comandaAtiva.codigo}
           </div>
-          <div style={{fontSize:13,color:"#c8a060"}}>Toque nos produtos para adicionar</div>
+          <div style={{fontSize:12,color:"#c8a060"}}>
+            {comandaAtiva.nomeCliente||""}
+            {" "}· Toque nos produtos para adicionar · Pagamento no caixa
+          </div>
         </div>
         <div style={{display:"flex",gap:8}}>
           <button style={{...S.btnS,fontSize:13}} onClick={()=>{setCarrinho([]);setComandaAtiva(null);setEtapa("comanda");}}>
@@ -1718,7 +1910,31 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
               <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:900,color:"#f0c040",marginBottom:12}}>
                 <span>Total</span><span>{fmt(total)}</span>
               </div>
-              <button style={ST.btnGVd} onClick={()=>setModalPag(true)}>💳 Finalizar</button>
+              <button style={{...ST.btnGVd,background:"linear-gradient(135deg,#1a5a00,#2a8a00)"}} onClick={()=>{
+                    // Envia pedido para a fila do caixa
+                    const pedidoCaixa = {
+                      id:uid(), codigo:comandaAtiva.codigo,
+                      tipo:comandaAtiva.tipo, mesa:comandaAtiva.mesa,
+                      nomeCliente:comandaAtiva.nomeCliente||"Consumidor",
+                      itens:[...carrinho], total, hora:now(), data:today(),
+                      status:"aguardando_pagamento",
+                    };
+                    setComandas(cs=>[...cs,{
+                      ...pedidoCaixa,
+                      status:"aberta",
+                      codigoComanda:comandaAtiva.codigo,
+                      totalParcial:total,
+                    }]);
+                    // Marca comanda como em uso com itens
+                    setComandasFisicas(cs=>cs.map(cf=>
+                      cf.codigo===comandaAtiva.codigo
+                        ?{...cf,status:"em_uso",nomeCliente:comandaAtiva.nomeCliente||"Consumidor",
+                           mesa:comandaAtiva.mesa,itens:[...carrinho],totalParcial:total}
+                        :cf
+                    ));
+                    setToast({msg:"✅ Pedido enviado para o caixa — Comanda "+comandaAtiva.codigo,tipo:"ok"});
+                    setCarrinho([]); setComandaAtiva(null); setEtapa("comanda");
+                  }}>📤 Enviar para o Caixa</button>
             </div>
           )}
         </div>
@@ -2289,6 +2505,7 @@ export default function App(){
     {key:"cadastro",label:"⚙️ Cadastro"},
     {key:"historico",label:"🧾 Histórico"},
     {key:"tablet",label:"📱 Atendente"},
+    {key:"leitor",label:"📷 Leitor"},
     {key:"comandas",label:"🎫 Comandas"},
     {key:"usuarios",label:"👥 Usuários"},
     {key:"caixa",label:"🔒 Caixa"},
@@ -2323,7 +2540,8 @@ export default function App(){
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
-        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} />}
+        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} comandasFisicas={comandasFisicas} />}
+        {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} />}
         {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
         {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} vendas={vendas} setToast={setToast} />}
