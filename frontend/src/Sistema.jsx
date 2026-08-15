@@ -519,13 +519,48 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
 }
 
 // ─── COMANDA DIGITAL (PADARIA) ────────────────────────────────────────────────
-function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{}}){
+function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{}}){
   const [modo,setModo]=useState("balcao");
   const [mesaSel,setMesaSel]=useState(null);
   const [carrinho,setCarrinho]=useState([]);
   const [modalPeso,setModalPeso]=useState(null);
   const [modalPag,setModalPag]=useState(false);
   const [nomeCliente,setNomeCliente]=useState("");
+
+  // Receber comanda rápida da aba Comandas
+  useEffect(()=>{
+    if(!comandaRapida) return;
+    if(comandaRapida.tipo==="fechar"){
+      // Abre direto no modal de pagamento do balcão
+      setModo("balcao");
+      setNomeCliente(comandaRapida.nomeCliente||"");
+      setModalPag(true);
+    } else if(comandaRapida.mesa){
+      // Vai para aba mesas e seleciona a mesa
+      setModo("mesa");
+      const n=parseInt(comandaRapida.mesa);
+      if(n){
+        // Abre a mesa se não estiver aberta
+        const existe=comandas.find(c=>c.mesa===n&&c.status==="aberta");
+        if(!existe){
+          setComandas(cs=>[...cs,{
+            id:uid(),mesa:n,itens:[],status:"aberta",
+            hora:now(),data:today(),tipo:"mesa",
+            nomeCliente:comandaRapida.nomeCliente||"",
+            codigoComanda:comandaRapida.codigo,
+          }]);
+        }
+        setMesaSel(n);
+        if(comandaRapida.nomeCliente) setNomeCliente(comandaRapida.nomeCliente);
+      }
+    } else {
+      // Balcão com comanda vinculada
+      setModo("balcao");
+      setNomeCliente(comandaRapida.nomeCliente||"");
+    }
+    setToast({msg:"🎫 Comanda "+comandaRapida.codigo+" — pronta para lançar pedidos",tipo:"ok"});
+    setComandaRapida(null);
+  },[comandaRapida]);
   const [catF,setCatF]=useState(0);
   const [busca,setBusca]=useState("");
 
@@ -1213,7 +1248,7 @@ const imprimirLoteComandas = (comandas, nomeEstab="PADARIA XV", subtitulo="Apres
   win.document.close();
 };
 
-function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas }) {
+function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba, setComandaRapida }) {
 
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [buscaCodigo, setBuscaCodigo]   = useState("");
@@ -1412,20 +1447,56 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas }) {
             {/* Ações */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {comandaSel.status === "livre" && (
-                <button style={{ ...S.btnOk }} onClick={() => {
-                  marcarEmUso(comandaSel.codigo, comandaSel.nomeCliente, comandaSel.mesa);
-                  setToast({ msg: "✅ Comanda " + comandaSel.codigo + " em uso!" + (comandaSel.mesa?" — Mesa "+comandaSel.mesa:""), tipo: "ok" });
-                  setComandaSel(null);
-                }}>✅ Iniciar Atendimento</button>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <button style={{ ...S.btnOk }} onClick={() => {
+                    marcarEmUso(comandaSel.codigo, comandaSel.nomeCliente, comandaSel.mesa);
+                    setToast({ msg: "✅ Comanda " + comandaSel.codigo + " em uso!", tipo: "ok" });
+                    // Redireciona para o PDV com a comanda já vinculada
+                    if (setComandaRapida) setComandaRapida({
+                      codigo: comandaSel.codigo,
+                      nomeCliente: comandaSel.nomeCliente,
+                      mesa: comandaSel.mesa,
+                      tipo: comandaSel.mesa ? "mesa" : "balcao"
+                    });
+                    if (setAba) setAba(comandaSel.mesa ? "comanda" : "comanda");
+                    setComandaSel(null);
+                  }}>✅ Iniciar Atendimento → Lançar Pedidos</button>
+                  <button style={{ ...S.btnS, fontSize:12, textAlign:"center" }} onClick={() => {
+                    marcarEmUso(comandaSel.codigo, comandaSel.nomeCliente, comandaSel.mesa);
+                    setToast({ msg: "✅ Comanda " + comandaSel.codigo + " marcada em uso", tipo: "ok" });
+                    setComandaSel(null);
+                  }}>Só marcar em uso (sem redirecionar)</button>
+                </div>
               )}
               {comandaSel.status === "em_uso" && (
-                <>
-                  <button style={S.btnOk} onClick={() => fecharComanda(comandaSel.codigo)}>💳 Fechar e Pagar</button>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <button style={{ ...S.btnOk }} onClick={() => {
+                    // Redireciona para PDV/Comanda para continuar lançando
+                    if (setComandaRapida) setComandaRapida({
+                      codigo: comandaSel.codigo,
+                      nomeCliente: comandaSel.nomeCliente,
+                      mesa: comandaSel.mesa,
+                      tipo: comandaSel.mesa ? "mesa" : "balcao"
+                    });
+                    if (setAba) setAba("comanda");
+                    setComandaSel(null);
+                    setToast({ msg: "🧺 Retomando comanda " + comandaSel.codigo, tipo: "ok" });
+                  }}>🧺 Continuar Lançando Pedidos</button>
+                  <button style={{ ...S.btnGr, fontSize:13 }} onClick={() => {
+                    if (setComandaRapida) setComandaRapida({
+                      codigo: comandaSel.codigo,
+                      nomeCliente: comandaSel.nomeCliente,
+                      mesa: comandaSel.mesa,
+                      tipo: "fechar"
+                    });
+                    if (setAba) setAba("comanda");
+                    setComandaSel(null);
+                  }}>💳 Ir para Pagamento</button>
                   <button style={{ ...S.btnS, fontSize: 12 }} onClick={() => {
                     imprimirLoteComandas([comandaSel]);
                     setToast({ msg: "🖨️ Imprimindo comanda " + comandaSel.codigo, tipo: "info" });
                   }}>🖨️ Reimprimir QR Code</button>
-                </>
+                </div>
               )}
               {comandaSel.status === "paga" && (
                 <button style={S.btnS} onClick={() => { liberarComanda(comandaSel.codigo); }}>🔓 Liberar Comanda</button>
@@ -2205,6 +2276,8 @@ export default function App(){
       status:"livre", pedidos:[], mesa:null, nomeCliente:"", abertoEm:null,
     }))
   );
+  // Comanda rápida — vem da aba Comandas e pré-preenche a ComandaDigital
+  const [comandaRapida,setComandaRapida]=useState(null);
 
   const abertas=comandas.filter(c=>c.status==="aberta").length;
   const estBaixo=produtos.filter(p=>p.tipo==="mercado"&&p.estoque!==null&&p.estoque<=5).length;
@@ -2251,7 +2324,7 @@ export default function App(){
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
         {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} />}
-        {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} />}
+        {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
         {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} vendas={vendas} setToast={setToast} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
