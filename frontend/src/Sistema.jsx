@@ -1746,20 +1746,18 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
         {/* Campo código */}
         <div style={{marginBottom:12}}>
           <label style={{...S.lbl,fontSize:13}}>Digite ou escaneie o código da comanda</label>
-          <div style={{display:"flex",gap:8}}>
-            <input
-              style={{...ST.inp,fontSize:22,fontWeight:700,textAlign:"center",letterSpacing:4,flex:1,
-                background:"#150c00",border:"2px solid #c8860a",color:"#f0c040"}}
-              placeholder="Ex: 042"
-              value={codComanda}
-              onChange={e=>setCodComanda(e.target.value.toUpperCase())}
-              onKeyDown={e=>e.key==="Enter"&&codComanda.trim()&&abrirComanda()}
-              autoFocus
-            />
-            <button style={{...ST.btnG,padding:"0 20px",fontSize:20}} onClick={abrirComanda} disabled={!codComanda.trim()}>
-              🔍
-            </button>
-          </div>
+          <input
+            style={{...ST.inp,fontSize:26,fontWeight:900,textAlign:"center",letterSpacing:6,
+              background:"#150c00",border:"3px solid #c8860a",color:"#f0c040",
+              padding:"16px",borderRadius:12,marginBottom:8,touchAction:"manipulation"}}
+            placeholder="042"
+            value={codComanda}
+            onChange={e=>setCodComanda(e.target.value.toUpperCase())}
+            onKeyDown={e=>e.key==="Enter"&&codComanda.trim()&&abrirComanda()}
+            inputMode="text"
+            autoComplete="off"
+            autoFocus
+          />
         </div>
 
         {/* Status da comanda digitada */}
@@ -1778,11 +1776,12 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
         })()}
 
         {/* Botões de ação */}
-        <div style={{display:"flex",gap:8,marginBottom:8}}>
-          <button style={{...ST.btnG,flex:1}} onClick={abrirComanda} disabled={!codComanda.trim()}>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
+          <button style={{...ST.btnG,fontSize:16,padding:"14px"}} onClick={abrirComanda}>
             ✅ Abrir Comanda
           </button>
-          <button style={{...ST.btnG,flex:1,background:"linear-gradient(135deg,#3a2000,#5a3400)",color:"#f0c040",border:"1px solid #c8860a"}}
+          <button style={{...ST.btnG,fontSize:16,padding:"14px",
+              background:"linear-gradient(135deg,#3a2000,#5a3400)",color:"#f0c040",border:"1px solid #c8860a"}}
             onClick={()=>{
               if(!codComanda.trim()) return;
               const cf=comandasFisicas?.find(x=>x.codigo===codComanda);
@@ -1790,13 +1789,35 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
                 setComandaAtiva({codigo:cf.codigo,tipo:cf.mesa?"mesa":"balcao",mesa:cf.mesa,nomeCliente:cf.nomeCliente});
                 setEtapa("pedido");
                 setCodComanda("");
+              } else {
+                // Se não está em uso, abre normalmente
+                abrirComanda();
               }
-            }} disabled={!codComanda.trim()}>
-            🧺 Retomar Comanda
+            }}>
+            🧺 Retomar / Continuar Comanda
           </button>
         </div>
 
-        <div style={{textAlign:"center",color:"#5a3a00",fontSize:13,margin:"12px 0"}}>— ou escolha o tipo de atendimento —</div>
+        {/* Teclado numérico rápido para tablet */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:12}}>
+          {["1","2","3","4","5","6","7","8","9","⌫","0","↵"].map(k=>(
+            <button key={k} onClick={()=>{
+              if(k==="⌫") setCodComanda(v=>v.slice(0,-1));
+              else if(k==="↵") { if(codComanda.trim()) abrirComanda(); }
+              else setCodComanda(v=>(v+k).slice(0,6));
+            }} style={{
+              padding:"14px 0",borderRadius:10,fontFamily:"inherit",
+              fontSize:k==="⌫"||k==="↵"?18:20,fontWeight:700,cursor:"pointer",
+              background:k==="↵"?"linear-gradient(135deg,#1a5a00,#2a8a00)":k==="⌫"?"#3a0a00":"#2a1400",
+              color:k==="↵"?"#b8ffb8":k==="⌫"?"#ff6b35":"#f0c040",
+              border:"1px solid "+(k==="↵"?"#2a8a00":k==="⌫"?"#5a1a00":"#5a3a00"),
+            }}>
+              {k}
+            </button>
+          ))}
+        </div>
+
+        <div style={{textAlign:"center",color:"#5a3a00",fontSize:13,margin:"8px 0"}}>— ou escolha o tipo de atendimento —</div>
 
         {/* BALCÃO direto */}
         <button
