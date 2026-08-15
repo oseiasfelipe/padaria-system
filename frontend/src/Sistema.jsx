@@ -41,6 +41,14 @@ const fmtKg  = (g) => g>=1000?(g/1000).toFixed(3)+" kg":g.toFixed(0)+"g";
 const now    = () => new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 const today  = () => new Date().toLocaleDateString("pt-BR");
 const uid    = () => Date.now() + Math.random();
+const API_URL = import.meta.env?.VITE_API_URL || '';
+const apiFetch = (path, opts={}) => {
+  const token = sessionStorage.getItem('padaria_token');
+  return fetch(API_URL + path, {
+    ...opts,
+    headers: { 'Content-Type':'application/json', Authorization:'Bearer '+token, ...(opts.headers||{}) }
+  });
+};
 
 // ─── ESTILOS ──────────────────────────────────────────────────────────────────
 const S = {
@@ -1666,9 +1674,7 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
 
   // Carregar usuários do backend
   useEffect(() => {
-    const token = sessionStorage.getItem('padaria_token');
-    fetch('/auth/me', { headers:{ Authorization:'Bearer '+token } })
-      .then(() => fetch('/usuarios', { headers:{ Authorization:'Bearer '+token } }))
+    apiFetch('/usuarios')
       .then(r => r.json())
       .then(data => { if(Array.isArray(data)) setUsuarios(data); })
       .catch(() => setToast({msg:"⚠️ Erro ao carregar usuários",tipo:"err"}))
@@ -1678,11 +1684,10 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
   const salvar = async () => {
     if (!form.nome || !form.email) { setToast({msg:"⚠️ Nome e email obrigatórios",tipo:"err"}); return; }
     if (!editId && form.pin.length < 4) { setToast({msg:"⚠️ PIN deve ter 4 dígitos",tipo:"err"}); return; }
-    const token = sessionStorage.getItem('padaria_token');
     try {
       if (editId) {
-        const r = await fetch('/usuarios/'+editId, {
-          method:'PUT', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token},
+        const r = await apiFetch('/usuarios/'+editId, {
+          method:'PUT',
           body: JSON.stringify(form)
         });
         const data = await r.json();
@@ -1691,8 +1696,8 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
         setToast({msg:"✅ Usuário atualizado",tipo:"ok"});
         setEditId(null);
       } else {
-        const r = await fetch('/usuarios', {
-          method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token},
+        const r = await apiFetch('/usuarios', {
+          method:'POST',
           body: JSON.stringify(form)
         });
         const data = await r.json();
@@ -1709,11 +1714,8 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
   const editar = (u) => { setForm({...u, pin:""}); setEditId(u.id); };
 
   const toggleAtivo = async (id) => {
-    const token = sessionStorage.getItem('padaria_token');
     try {
-      const r = await fetch('/usuarios/'+id+'/toggle', {
-        method:'PATCH', headers:{ Authorization:'Bearer '+token }
-      });
+      const r = await apiFetch('/usuarios/'+id+'/toggle', { method:'PATCH' });
       const data = await r.json();
       if(!r.ok) throw new Error(data.erro);
       setUsuarios(u => u.map(x => x.id===id ? data : x));
@@ -1722,11 +1724,8 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
 
   const remover = async (id) => {
     if (id===1) { setToast({msg:"⚠️ Admin padrão não pode ser removido",tipo:"err"}); return; }
-    const token = sessionStorage.getItem('padaria_token');
     try {
-      const r = await fetch('/usuarios/'+id, {
-        method:'DELETE', headers:{ Authorization:'Bearer '+token }
-      });
+      const r = await apiFetch('/usuarios/'+id, { method:'DELETE' });
       if(!r.ok) throw new Error('Erro ao remover');
       setUsuarios(u => u.filter(x => x.id!==id));
       setToast({msg:"✅ Usuário removido",tipo:"ok"});
