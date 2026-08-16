@@ -1277,10 +1277,153 @@ const imprimirLoteComandas = (comandas, nomeEstab="PADARIA XV", subtitulo="Apres
 };
 
 
+
+// ─── LEITOR DE QR CODE POR CÂMERA ────────────────────────────────────────────
+function CameraScanner({ onScan, onFechar }) {
+  const videoRef  = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const timerRef  = useRef(null);
+  const [status, setStatus]   = useState("iniciando"); // iniciando | ativo | erro
+  const [msgErro, setMsgErro] = useState("");
+
+  useEffect(() => {
+    iniciarCamera();
+    return () => pararCamera();
+  }, []);
+
+  const iniciarCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setStatus("ativo");
+        iniciarLeitura();
+      }
+    } catch (err) {
+      setStatus("erro");
+      if (err.name === "NotAllowedError")
+        setMsgErro("Permissão de câmera negada. Permita o acesso nas configurações do navegador.");
+      else if (err.name === "NotFoundError")
+        setMsgErro("Câmera não encontrada neste dispositivo.");
+      else
+        setMsgErro("Erro ao acessar a câmera: " + err.message);
+    }
+  };
+
+  const pararCamera = () => {
+    clearInterval(timerRef.current);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const iniciarLeitura = () => {
+    // Tenta usar BarcodeDetector (API nativa — Chrome/Android)
+    if ("BarcodeDetector" in window) {
+      const detector = new window.BarcodeDetector({ formats: ["qr_code", "code_128", "code_39", "ean_13"] });
+      timerRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) {
+            const valor = barcodes[0].rawValue;
+            pararCamera();
+            onScan(valor);
+          }
+        } catch {}
+      }, 300);
+    } else {
+      // Fallback: canvas + jsQR via CDN
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+      script.onload = () => {
+        timerRef.current = setInterval(() => {
+          if (!videoRef.current || !canvasRef.current) return;
+          if (videoRef.current.readyState < 2) return;
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext("2d");
+          canvas.width  = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          // eslint-disable-next-line no-undef
+          const code = jsQR(imgData.data, imgData.width, imgData.height);
+          if (code) {
+            pararCamera();
+            onScan(code.data);
+          }
+        }, 300);
+      };
+      document.head.appendChild(script);
+    }
+  };
+
+  return (
+    <div style={S.overlay} onClick={onFechar}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background:"#0d0800", border:"2px solid #c8860a", borderRadius:20,
+        padding:20, width:340, boxShadow:"0 20px 60px rgba(0,0,0,0.9)",
+        display:"flex", flexDirection:"column", alignItems:"center", gap:14
+      }}>
+        <div style={{fontSize:16,fontWeight:700,color:"#f0c040"}}>📷 Escanear QR Code da Comanda</div>
+
+        {status==="iniciando" && (
+          <div style={{textAlign:"center",padding:40,color:"#c8a060"}}>
+            <div style={{fontSize:36,marginBottom:8,animation:"spin 1s linear infinite"}}>📷</div>
+            Abrindo câmera...
+          </div>
+        )}
+
+        {status==="ativo" && (
+          <div style={{position:"relative",width:"100%",borderRadius:12,overflow:"hidden",background:"#000"}}>
+            <video ref={videoRef} style={{width:"100%",display:"block",borderRadius:12}} playsInline muted />
+            <canvas ref={canvasRef} style={{display:"none"}} />
+            {/* Mira de leitura */}
+            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+              <div style={{width:180,height:180,border:"3px solid #f0c040",borderRadius:12,boxShadow:"0 0 0 2000px rgba(0,0,0,0.4)"}}>
+                {/* cantos decorativos */}
+                {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos,i)=>(
+                  <div key={i} style={{position:"absolute",width:24,height:24,border:"3px solid #f0c040",
+                    borderRight:pos.right!==undefined?"3px solid #f0c040":"none",
+                    borderBottom:pos.bottom!==undefined?"3px solid #f0c040":"none",
+                    borderLeft:pos.left!==undefined?"3px solid #f0c040":"none",
+                    borderTop:pos.top!==undefined?"3px solid #f0c040":"none",
+                    ...pos,borderRadius:pos.top!==undefined&&pos.left!==undefined?"4px 0 0 0":pos.top!==undefined?"0 4px 0 0":pos.left!==undefined?"0 0 0 4px":"0 0 4px 0"
+                  }} />
+                ))}
+              </div>
+            </div>
+            <div style={{position:"absolute",bottom:8,left:0,right:0,textAlign:"center",fontSize:11,color:"#f0c040",fontWeight:600}}>
+              Aponte para o QR Code da comanda
+            </div>
+          </div>
+        )}
+
+        {status==="erro" && (
+          <div style={{textAlign:"center",padding:20}}>
+            <div style={{fontSize:36,marginBottom:8}}>❌</div>
+            <div style={{fontSize:13,color:"#ff6a6a",marginBottom:16}}>{msgErro}</div>
+            <button style={S.btnP} onClick={iniciarCamera}>🔄 Tentar novamente</button>
+          </div>
+        )}
+
+        <button style={{...S.btnS,width:"100%"}} onClick={onFechar}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── LEITOR DE STATUS DE COMANDA ─────────────────────────────────────────────
 function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComandaRapida, setToast }) {
   const [cod, setCod]       = useState("");
   const [resultado, setResultado] = useState(null);
+  const [mostrarCam, setMostrarCam] = useState(false);
   const inputRef = useRef();
 
   useEffect(()=>{ setTimeout(()=>inputRef.current?.focus(),100); },[]);
@@ -1301,14 +1444,21 @@ function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComanda
     <div style={{maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",gap:14}}>
       <div style={S.card}>
         <div style={S.sT()}>📷 Consultar Status da Comanda</div>
+        {mostrarCam&&<CameraScanner
+          onScan={(v)=>{ setMostrarCam(false); const cod=v.replace("COMANDA:","").trim().toUpperCase(); setCod(cod); consultar(cod); }}
+          onFechar={()=>setMostrarCam(false)}
+        />}
         <label style={S.lbl}>Digite ou escaneie o código</label>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
           <input ref={inputRef} style={{...S.inp,fontSize:20,fontWeight:700,textAlign:"center",letterSpacing:3,flex:1}}
             placeholder="Ex: 042" value={cod}
             onChange={e=>setCod(e.target.value.toUpperCase())}
             onKeyDown={e=>{ if(e.key==="Enter") consultar(cod); }} />
           <button style={S.btnP} onClick={()=>consultar(cod)}>🔍</button>
         </div>
+        <button style={{...S.btnS,width:"100%"}} onClick={()=>setMostrarCam(true)}>
+          📷 Usar Câmera para Escanear QR Code
+        </button>
       </div>
 
       {resultado && (
@@ -1673,6 +1823,7 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
   const [etapa, setEtapa]           = useState("comanda");  // comanda | pedido | pagamento
   const [codComanda, setCodComanda] = useState("");
   const [comandaAtiva, setComandaAtiva] = useState(null);    // {codigo, tipo, mesa, nomeCliente}
+  const [mostrarCamera, setMostrarCamera] = useState(false);
   const [carrinho, setCarrinho]     = useState([]);
   const [catFiltro, setCatFiltro]   = useState(0);
   const [busca, setBusca]           = useState("");
@@ -1739,13 +1890,42 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
   if (etapa==="comanda") return (
     <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:680,margin:"0 auto"}}>
 
+      {/* Scanner de câmera */}
+      {mostrarCamera&&<CameraScanner
+        onScan={(valor)=>{
+          const cod=valor.replace("COMANDA:","").trim().toUpperCase();
+          setCodComanda(cod);
+          setMostrarCamera(false);
+          // Abre automaticamente após escanear
+          setTimeout(()=>{
+            const cf=comandasFisicas?.find(x=>x.codigo===cod);
+            if(cf?.status==="em_uso"){
+              setComandaAtiva({codigo:cf.codigo,tipo:cf.mesa?"mesa":"balcao",mesa:cf.mesa,nomeCliente:cf.nomeCliente});
+              setEtapa("pedido");
+            } else {
+              // Abre nova comanda
+              setComandasFisicas(cs=>cs.map(x=>x.codigo===cod?{...x,status:"em_uso",abertoEm:now()}:x));
+              setComandaAtiva({codigo:cod,tipo:"balcao",mesa:null,nomeCliente:""});
+              setEtapa("pedido");
+            }
+          },100);
+        }}
+        onFechar={()=>setMostrarCamera(false)}
+      />}
+
       {/* Card principal — código da comanda */}
       <div style={ST.card}>
         <div style={{...S.sT(),...{fontSize:18,marginBottom:16}}}>🎫 Identificar Comanda</div>
 
         {/* Campo código */}
         <div style={{marginBottom:12}}>
-          <label style={{...S.lbl,fontSize:13}}>Digite ou escaneie o código da comanda</label>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <label style={{...S.lbl,margin:0,fontSize:13}}>Digite ou escaneie o código da comanda</label>
+            <button onClick={()=>setMostrarCamera(true)} style={{
+              padding:"6px 12px",borderRadius:8,border:"1px solid #c8860a",
+              background:"#2a1400",color:"#f0c040",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:700
+            }}>📷 Câmera</button>
+          </div>
           <input
             style={{...ST.inp,fontSize:26,fontWeight:900,textAlign:"center",letterSpacing:6,
               background:"#150c00",border:"3px solid #c8860a",color:"#f0c040",
