@@ -553,6 +553,10 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
   const [carrinho,setCarrinho]=useState([]);
   const [modalPeso,setModalPeso]=useState(null);
   const [nomeCliente,setNomeCliente]=useState("");
+  // Código da comanda física vinculada ao atendimento de balcão atual (se veio
+  // do Leitor/Comandas). Precisa viajar junto no pedido para o Caixa saber
+  // qual comanda física liberar quando o pagamento for confirmado.
+  const [codigoBalcaoAtual,setCodigoBalcaoAtual]=useState(null);
 
   // Receber comanda rápida da aba Comandas
   useEffect(()=>{
@@ -576,9 +580,10 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
         if(comandaRapida.nomeCliente) setNomeCliente(comandaRapida.nomeCliente);
       }
     } else {
-      // Balcão com comanda vinculada
+      // Balcão com comanda física vinculada
       setModo("balcao");
       setNomeCliente(comandaRapida.nomeCliente||"");
+      setCodigoBalcaoAtual(comandaRapida.codigo||null);
     }
     setToast({msg:"🎫 Comanda "+comandaRapida.codigo+" — pronta para lançar pedidos",tipo:"ok"});
     setComandaRapida(null);
@@ -654,12 +659,14 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     setAba("caixa");
   };
 
-  // Envia o carrinho do balcão para a fila de pagamento do Caixa.
+  // Envia o carrinho do balcão para a fila de pagamento do Caixa — inclui o
+  // código da comanda física (se houver) para que o Caixa consiga liberá-la
+  // automaticamente ao confirmar o pagamento.
   const enviarBalcaoParaCaixa=()=>{
     if(carrinho.length===0)return;
-    setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"aberta",hora:now(),data:today(),totalParcial:totalBalcao,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}]);
+    setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"aberta",hora:now(),data:today(),totalParcial:totalBalcao,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao",codigoComanda:codigoBalcaoAtual||undefined}]);
     setToast({msg:"📤 Pedido enviado para o caixa — "+fmt(totalBalcao),tipo:"ok"});
-    setCarrinho([]);setNomeCliente("");
+    setCarrinho([]);setNomeCliente("");setCodigoBalcaoAtual(null);
   };
 
   const itensAtivos=modo==="balcao"?carrinho:(comanda?.itens||[]);
