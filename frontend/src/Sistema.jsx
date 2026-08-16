@@ -50,6 +50,34 @@ const apiFetch = (path, opts={}) => {
   });
 };
 
+// ─── PERSISTÊNCIA LOCAL (localStorage) ───────────────────────────────────────
+// Guarda estado no navegador para sobreviver a um F5 / fechar aba.
+// Não sincroniza entre dispositivos — isso exigiria salvar via backend/API.
+const LS_PREFIX = "padaria_v1_";
+const lsLoad = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX+key);
+    if(raw===null) return typeof fallback==="function" ? fallback() : fallback;
+    return JSON.parse(raw);
+  } catch(err) {
+    console.error("Falha ao ler localStorage:", key, err);
+    return typeof fallback==="function" ? fallback() : fallback;
+  }
+};
+const lsSave = (key, value) => {
+  try {
+    localStorage.setItem(LS_PREFIX+key, JSON.stringify(value));
+  } catch(err) {
+    console.error("Falha ao salvar localStorage:", key, err);
+  }
+};
+// useState que lê do localStorage na primeira renderização e salva a cada mudança.
+function usePersistedState(key, fallback){
+  const [state, setState] = useState(()=>lsLoad(key, fallback));
+  useEffect(()=>{ lsSave(key, state); }, [state]);
+  return [state, setState];
+}
+
 // ─── ESTILOS ──────────────────────────────────────────────────────────────────
 const S = {
   app:     { fontFamily:"'Playfair Display','Georgia',serif", background:"#0d0800", minHeight:"100vh", color:"#f5e6c8" },
@@ -2158,12 +2186,11 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
 }
 
 // ─── FECHAMENTO DE CAIXA ──────────────────────────────────────────────────────
-function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{}}){
+function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{},caixasFechados=[],setCaixasFechados=()=>{}}){
   const hoje=today();
   const [periodoFiltro,setPeriodoFiltro]=useState("hoje");
   const [dataInicio,setDataInicio]=useState(hoje);
   const [dataFim,setDataFim]=useState(hoje);
-  const [caixasFechados,setCaixasFechados]=useState([]);
   const [mostrarFechar,setMostrarFechar]=useState(false);
   const [obsFechar,setObsFechar]=useState("");
   const [sangria,setSangria]=useState("");
@@ -2556,17 +2583,19 @@ function Relatorio({comandas,vendas,produtos}){
 // ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
 export default function App(){
   const [aba,setAba]=useState("pdv");
-  const [produtos,setProdutos]=useState(PRODUTOS_INICIAIS);
-  const [categorias,setCategorias]=useState(CATEGORIAS_INICIAIS);
-  const [comandas,setComandas]=useState([]);
-  const [vendas,setVendas]=useState([]);
+  const [produtos,setProdutos]=usePersistedState("produtos", PRODUTOS_INICIAIS);
+  const [categorias,setCategorias]=usePersistedState("categorias", CATEGORIAS_INICIAIS);
+  const [comandas,setComandas]=usePersistedState("comandas", []);
+  const [vendas,setVendas]=usePersistedState("vendas", []);
   const [toast,setToast]=useState(null);
-  const [comandasFisicas,setComandasFisicas]=useState(()=>
+  const [comandasFisicas,setComandasFisicas]=usePersistedState("comandasFisicas", ()=>
     Array.from({length:50},(_,i)=>({
       codigo:String(i+1).padStart(3,"0"),
       status:"livre", pedidos:[], mesa:null, nomeCliente:"", abertoEm:null,
     }))
   );
+  // Histórico de fechamentos de caixa também precisa sobreviver a refresh/troca de aba
+  const [caixasFechados,setCaixasFechados]=usePersistedState("caixasFechados", []);
   // Comanda rápida — vem da aba Comandas e pré-preenche a ComandaDigital
   const [comandaRapida,setComandaRapida]=useState(null);
 
@@ -2620,7 +2649,7 @@ export default function App(){
         {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} />}
         {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
-        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} />}
+        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} caixasFechados={caixasFechados} setCaixasFechados={setCaixasFechados} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
       </main>
       {toast&&<Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)} />}
