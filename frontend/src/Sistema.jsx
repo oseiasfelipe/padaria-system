@@ -1045,9 +1045,6 @@ function Historico({comandas,vendas}){
   );
 }
 
-// ─── RELATÓRIO ────────────────────────────────────────────────────────────────
-
-
 // ─── IMPRESSÃO DE CUPOM (ESC/POS via Print Window) ───────────────────────────
 const gerarCupom = (venda, nomeEstabelecimento="PADARIA XV") => {
   const fmt2 = (v) => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
@@ -1093,18 +1090,9 @@ const imprimirCupom = (venda, nomeEstabelecimento) => {
   const texto = gerarCupom(venda, nomeEstabelecimento);
   const win = window.open("","_blank","width=320,height=600");
   if(!win) { alert(texto); return; }
-  win.document.write(`
-    <html><head><title>Cupom</title>
-    <style>
-      body { font-family: 'Courier New', monospace; font-size: 12px; margin: 8px; white-space: pre; }
-      @media print { button { display:none; } }
-    </style></head>
-    <body>
-      <pre>${texto}</pre>
-      <br/>
-      <button onclick="window.print();window.close();" style="width:100%;padding:8px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button>
-    </body></html>
-  `);
+  win.document.write(
+    '<html><head><title>Cupom</title><style>body { font-family: "Courier New", monospace; font-size: 12px; margin: 8px; white-space: pre; } @media print { button { display:none; } }</style></head><body><pre>' + texto + '</pre><br/><button onclick="window.print();window.close();" style="width:100%;padding:8px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button></body></html>'
+  );
   win.document.close();
   setTimeout(()=>win.print(), 500);
 };
@@ -1133,150 +1121,13 @@ const imprimirLoteComandas = (comandas, nomeEstab="PADARIA XV", subtitulo="Apres
   const win = window.open("", "_blank", "width=1000,height=800");
   if (!win) return;
 
-  const itens = comandas.map(c => `
-    <div class="comanda">
-      <div class="header-comanda">
-        <span class="logo-icon">🥖</span>
-        <span class="nome-estab">${nomeEstab}</span>
-      </div>
-      <div class="numero">${c.codigo}</div>
-      <div class="qr-wrap">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent("COMANDA:"+c.codigo)}" width="130" height="130" />
-      </div>
-      <div class="sub">${subtitulo}</div>
-      <div class="linha-pontilhada">- - - - - - - - - - - - - -</div>
-    </div>
-  `).join("");
+  const itens = comandas.map(c => {
+    return '<div class="comanda"><div class="header-comanda"><span class="logo-icon">🥖</span><span class="nome-estab">' + nomeEstab + '</span></div><div class="numero">' + c.codigo + '</div><div class="qr-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=' + encodeURIComponent("COMANDA:"+c.codigo) + '" width="130" height="130" /></div><div class="sub">' + subtitulo + '</div><div class="linha-pontilhada">- - - - - - - - - - - - - -</div></div>';
+  }).join("");
 
-  win.document.write(`<!DOCTYPE html>
-    <html><head>
-    <meta charset="UTF-8">
-    <title>Comandas - ${nomeEstab}</title>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body {
-        font-family: 'Arial', sans-serif;
-        background: #f5f0e8;
-        padding: 16px;
-      }
-      .toolbar {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 16px;
-        background: #2d1a00;
-        padding: 12px 16px;
-        border-radius: 10px;
-      }
-      .toolbar h2 { color: #f0c040; font-size: 16px; flex:1; }
-      .toolbar button {
-        padding: 8px 18px;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: bold;
-      }
-      .btn-print { background: #c8860a; color: #fff; }
-      .btn-info  { background: #1a5a00; color: #b8ffb8; }
-      .info-box {
-        background: #fff8e8;
-        border: 1px solid #c8860a;
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 14px;
-        font-size: 12px;
-        color: #5a3a00;
-      }
-      .grade {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-        gap: 12px;
-      }
-      .comanda {
-        background: #ffffff;
-        border: 2px dashed #c8860a;
-        border-radius: 10px;
-        padding: 12px 10px 8px;
-        text-align: center;
-        break-inside: avoid;
-        page-break-inside: avoid;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-      }
-      .header-comanda {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        margin-bottom: 4px;
-      }
-      .logo-icon { font-size: 14px; }
-      .nome-estab {
-        font-size: 10px;
-        font-weight: bold;
-        color: #8B4513;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-      .numero {
-        font-size: 36px;
-        font-weight: 900;
-        color: #2d1a00;
-        letter-spacing: 2px;
-        margin: 4px 0;
-        font-family: 'Courier New', monospace;
-      }
-      .qr-wrap {
-        display: flex;
-        justify-content: center;
-        margin: 6px 0;
-        background: #fff;
-        border-radius: 6px;
-        padding: 4px;
-        border: 1px solid #f0e8d0;
-      }
-      .qr-wrap img { display: block; }
-      .sub {
-        font-size: 9px;
-        color: #8B4513;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-top: 6px;
-      }
-      .linha-pontilhada {
-        font-size: 9px;
-        color: #ddd;
-        margin-top: 6px;
-        overflow: hidden;
-      }
-
-      @media print {
-        body { background: #fff; padding: 8px; }
-        .toolbar { display: none; }
-        .info-box { display: none; }
-        .comanda { box-shadow: none; border-color: #aaa; }
-        .grade { gap: 8px; }
-      }
-      @page { margin: 10mm; }
-    </style>
-    </head>
-    <body>
-      <div class="toolbar">
-        <h2>🎫 Catálogo de Comandas — ${nomeEstab} (${comandas.length} unidades)</h2>
-        <button class="btn-info" onclick="this.closest('.toolbar').nextElementSibling.style.display=this.closest('.toolbar').nextElementSibling.style.display==='none'?'block':'none'">ℹ️ Instruções</button>
-        <button class="btn-print" onclick="window.print()">🖨️ Imprimir Tudo</button>
-      </div>
-      <div class="info-box">
-        <strong>📋 Instruções de uso:</strong> Imprima esta página em papel A4 · Recorte cada comanda pela linha pontilhada · Entregue uma comanda física para cada cliente · O atendente digita ou escaneia o número para abrir o pedido no sistema.
-      </div>
-      <div class="grade">${itens}</div>
-    </body></html>
-  `);
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comandas - ' + nomeEstab + '</title><style>* { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: "Arial", sans-serif; background: #f5f0e8; padding: 16px; } .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; background: #2d1a00; padding: 12px 16px; border-radius: 10px; } .toolbar h2 { color: #f0c040; font-size: 16px; flex:1; } .toolbar button { padding: 8px 18px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; } .btn-print { background: #c8860a; color: #fff; } .btn-info { background: #1a5a00; color: #b8ffb8; } .info-box { background: #fff8e8; border: 1px solid #c8860a; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #5a3a00; } .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; } .comanda { background: #ffffff; border: 2px dashed #c8860a; border-radius: 10px; padding: 12px 10px 8px; text-align: center; break-inside: avoid; page-break-inside: avoid; box-shadow: 0 2px 6px rgba(0,0,0,0.08); } .header-comanda { display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 4px; } .logo-icon { font-size: 14px; } .nome-estab { font-size: 10px; font-weight: bold; color: #8B4513; text-transform: uppercase; letter-spacing: 0.5px; } .numero { font-size: 36px; font-weight: 900; color: #2d1a00; letter-spacing: 2px; margin: 4px 0; font-family: "Courier New", monospace; } .qr-wrap { display: flex; justify-content: center; margin: 6px 0; background: #fff; border-radius: 6px; padding: 4px; border: 1px solid #f0e8d0; } .qr-wrap img { display: block; } .sub { font-size: 9px; color: #8B4513; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; } .linha-pontilhada { font-size: 9px; color: #ddd; margin-top: 6px; overflow: hidden; } @media print { body { background: #fff; padding: 8px; } .toolbar { display: none; } .info-box { display: none; } .comanda { box-shadow: none; border-color: #aaa; } .grade { gap: 8px; } } @page { margin: 10mm; }</style></head><body><div class="toolbar"><h2>🎫 Catálogo de Comandas — ' + nomeEstab + ' (' + comandas.length + ' unidades)</h2><button class="btn-info" onclick="this.closest(\'.toolbar\').nextElementSibling.style.display=this.closest(\'.toolbar\').nextElementSibling.style.display===\'none\'?\'block\':\'none\'">ℹ️ Instruções</button><button class="btn-print" onclick="window.print()">🖨️ Imprimir Tudo</button></div><div class="info-box"><strong>📋 Instruções de uso:</strong> Imprima esta página em papel A4 · Recorte cada comanda pela linha pontilhada · Entregue uma comanda física para cada cliente · O atendente digita ou escaneia o número para abrir o pedido no sistema.</div><div class="grade">' + itens + '</div></body></html>');
   win.document.close();
 };
-
-
 
 // ─── LEITOR DE QR CODE POR CÂMERA ────────────────────────────────────────────
 function CameraScanner({ onScan, onFechar }) {
@@ -1506,10 +1357,9 @@ function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComanda
                       setToast({msg:"🧺 Retomando comanda "+resultado.codigo,tipo:"ok"});
                     }}>🧺 Continuar / Adicionar Itens</button>
                     <button style={S.btnGr} onClick={()=>{
-                      if(setComandaRapida) setComandaRapida({codigo:resultado.codigo,nomeCliente:resultado.nomeCliente,mesa:resultado.mesa,tipo:"fechar"});
-                      if(setAba) setAba("comanda");
+                      if(setAba) setAba("caixa");
                       setResultado(null);
-                    }}>💳 Ir para Pagamento</button>
+                    }}>💳 Ir para o Caixa (Pagamento)</button>
                   </>
                 )}
                 {resultado.status==="paga" && (
@@ -1764,15 +1614,9 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
                     setToast({ msg: "🧺 Retomando comanda " + comandaSel.codigo, tipo: "ok" });
                   }}>🧺 Continuar Lançando Pedidos</button>
                   <button style={{ ...S.btnGr, fontSize:13 }} onClick={() => {
-                    if (setComandaRapida) setComandaRapida({
-                      codigo: comandaSel.codigo,
-                      nomeCliente: comandaSel.nomeCliente,
-                      mesa: comandaSel.mesa,
-                      tipo: "fechar"
-                    });
-                    if (setAba) setAba("comanda");
+                    if (setAba) setAba("caixa");
                     setComandaSel(null);
-                  }}>💳 Ir para Pagamento</button>
+                  }}>💳 Ir para o Caixa (Pagamento)</button>
                   <button style={{ ...S.btnS, fontSize: 12 }} onClick={() => {
                     imprimirLoteComandas([comandaSel]);
                     setToast({ msg: "🖨️ Imprimindo comanda " + comandaSel.codigo, tipo: "info" });
@@ -2338,7 +2182,7 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
 }
 
 // ─── FECHAMENTO DE CAIXA ──────────────────────────────────────────────────────
-function FechamentoCaixa({comandas,vendas,setToast}){
+function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{}}){
   const hoje=today();
   const [periodoFiltro,setPeriodoFiltro]=useState("hoje");
   const [dataInicio,setDataInicio]=useState(hoje);
@@ -2348,6 +2192,28 @@ function FechamentoCaixa({comandas,vendas,setToast}){
   const [obsFechar,setObsFechar]=useState("");
   const [sangria,setSangria]=useState("");
   const [suprimento,setSuprimento]=useState("");
+  const [pedidoPag,setPedidoPag]=useState(null); // pedido em aberto selecionado para cobrar
+
+  // ── Fila de pedidos aguardando pagamento (vindos do Atendente/Leitor) ──
+  const pendentes = comandas.filter(c=>c.status==="aberta"&&(c.itens||[]).length>0);
+  const totalPendentes = pendentes.reduce((s,p)=>s+(p.totalParcial||0),0);
+
+  const finalizarPedidoPendente = (pagamentos) => {
+    if(!pedidoPag) return;
+    const totalPedido = pedidoPag.totalParcial || (pedidoPag.itens||[]).reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0);
+    setComandas(cs=>cs.map(c=>c.id===pedidoPag.id?{...c,status:"fechada",totalFinal:totalPedido,pagamentos}:c));
+    imprimirCupom({
+      id:Date.now(), mesa:pedidoPag.mesa||"Balcão", itens:pedidoPag.itens,
+      status:"fechada", hora:now(), data:today(), totalFinal:totalPedido, pagamentos,
+      nomeCliente:pedidoPag.nomeCliente||"Consumidor", tipo:pedidoPag.tipo,
+    });
+    // Libera a comanda física vinculada
+    if(pedidoPag.codigoComanda){
+      setComandasFisicas(cs=>cs.map(cf=>cf.codigo===pedidoPag.codigoComanda?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[],itens:[],totalParcial:0}:cf));
+    }
+    setToast({msg:"✅ Pagamento recebido — "+fmt(totalPedido),tipo:"ok"});
+    setPedidoPag(null);
+  };
 
   const filtrarPorPeriodo=(lista,campo)=>{
     if(periodoFiltro==="hoje") return lista.filter(v=>(v[campo]||v.data)===hoje);
@@ -2448,6 +2314,34 @@ function FechamentoCaixa({comandas,vendas,setToast}){
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {pedidoPag&&<ModalPagamento total={pedidoPag.totalParcial||(pedidoPag.itens||[]).reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0)} onConfirmar={finalizarPedidoPendente} onFechar={()=>setPedidoPag(null)} />}
+
+      {/* Fila de pedidos aguardando pagamento — vindos do Atendente/Leitor */}
+      {pendentes.length>0&&(
+        <div style={{...S.card,border:"2px solid #c8860a"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={S.sT("#f0c040")}>🎫 Pedidos Aguardando Pagamento ({pendentes.length})</div>
+            <span style={{fontSize:15,fontWeight:900,color:"#f0c040"}}>{fmt(totalPendentes)}</span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:10}}>
+            {pendentes.map(p=>(
+              <div key={p.id} onClick={()=>setPedidoPag(p)} style={{padding:"12px 14px",borderRadius:10,background:"#150c00",border:"1px solid #4a3000",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{fontWeight:700,color:"#f0c040",fontSize:13}}>
+                    {p.mesa&&p.mesa!=="Balcão"?"🍽️ Mesa "+p.mesa:"🛍️ Balcão"}{p.codigoComanda?" · 🎫 "+p.codigoComanda:""}
+                  </span>
+                  <span style={{fontSize:15,fontWeight:900,color:"#8aee3a"}}>{fmt(p.totalParcial||0)}</span>
+                </div>
+                <div style={{fontSize:11,color:"#c8a060"}}>{p.nomeCliente||"Consumidor"} · {(p.itens||[]).length} itens · {p.hora}</div>
+                <div style={{marginTop:8}}>
+                  <button style={{...S.btnOk}} onClick={(e)=>{e.stopPropagation();setPedidoPag(p);}}>💳 Cobrar</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Filtro período */}
       <div style={{...S.card,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
         <span style={{color:"#c8a060",fontSize:13,fontWeight:600}}>📅 Período:</span>
@@ -2499,7 +2393,7 @@ function FechamentoCaixa({comandas,vendas,setToast}){
                   </div>
                 </div>
                 <div style={{background:"#150c00",borderRadius:6,height:10,overflow:"hidden"}}>
-                  <div style={{width:totalGeral>0?`${(valor/totalGeral)*100}%`:"0%",height:"100%",background:"linear-gradient(90deg,#c8860a,#f0c040)",borderRadius:6,transition:"width 0.5s"}} />
+                  <div style={{width:totalGeral>0?((valor/totalGeral)*100)+"%":"0%",height:"100%",background:"linear-gradient(90deg,#c8860a,#f0c040)",borderRadius:6,transition:"width 0.5s"}} />
                 </div>
               </div>
             ))
@@ -2547,7 +2441,7 @@ function FechamentoCaixa({comandas,vendas,setToast}){
                       <span style={{color:"#f0c040",fontWeight:700}}>{fmt(val)}</span>
                     </div>
                     <div style={{background:"#150c00",borderRadius:5,height:7,overflow:"hidden"}}>
-                      <div style={{width:`${(val/maxHora)*100}%`,height:"100%",background:"linear-gradient(90deg,#c8860a,#f0c040)",borderRadius:5}} />
+                      <div style={{width:((val/maxHora)*100)+"%",height:"100%",background:"linear-gradient(90deg,#c8860a,#f0c040)",borderRadius:5}} />
                     </div>
                   </div>
                 ))}
@@ -2648,7 +2542,7 @@ function Relatorio({comandas,vendas,produtos}){
           {rankArr.length===0?<div style={{color:"#5a3a00",textAlign:"center",padding:20}}>Sem vendas hoje</div>:rankArr.map(([nome,qtd],idx)=>(
             <div key={nome} style={{marginBottom:10}}>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}><span style={{color:"#f0f0f0"}}>{idx+1}. {nome}</span><span style={{color:"#f0c040",fontWeight:700}}>{qtd}×</span></div>
-              <div style={{background:"#0d0d1a",borderRadius:5,height:7,overflow:"hidden"}}><div style={{width:`${(qtd/maxQ)*100}%`,height:"100%",background:"linear-gradient(90deg,#c8860a,#f0c040)",borderRadius:5}} /></div>
+              <div style={{background:"#0d0d1a",borderRadius:5,height:7,overflow:"hidden"}}><div style={{width:((qtd/maxQ)*100)+"%",height:"100%",background:"linear-gradient(90deg,#c8860a,#f0c040)",borderRadius:5}} /></div>
             </div>
           ))}
         </div>
@@ -2697,6 +2591,7 @@ export default function App(){
   const [comandaRapida,setComandaRapida]=useState(null);
 
   const abertas=comandas.filter(c=>c.status==="aberta").length;
+  const pendentesCaixa=comandas.filter(c=>c.status==="aberta"&&(c.itens||[]).length>0).length;
   const estBaixo=produtos.filter(p=>p.tipo==="mercado"&&p.estoque!==null&&p.estoque<=5).length;
 
   const abas=[
@@ -2709,7 +2604,7 @@ export default function App(){
     {key:"leitor",label:"📷 Leitor"},
     {key:"comandas",label:"🎫 Comandas"},
     {key:"usuarios",label:"👥 Usuários"},
-    {key:"caixa",label:"🔒 Caixa"},
+    {key:"caixa",label:"🔒 Caixa"+(pendentesCaixa>0?" ("+pendentesCaixa+")":"")},
     {key:"relatorio",label:"📊 Relatório"},
   ];
 
@@ -2737,7 +2632,7 @@ export default function App(){
       </header>
       <main style={S.main}>
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
-        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} />}
+        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} />}
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
@@ -2745,7 +2640,7 @@ export default function App(){
         {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} />}
         {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
-        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} vendas={vendas} setToast={setToast} />}
+        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
       </main>
       {toast&&<Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)} />}
