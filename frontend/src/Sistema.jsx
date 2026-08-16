@@ -519,23 +519,17 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
 }
 
 // ─── COMANDA DIGITAL (PADARIA) ────────────────────────────────────────────────
-function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{}}){
+function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{},setAba=()=>{}}){
   const [modo,setModo]=useState("balcao");
   const [mesaSel,setMesaSel]=useState(null);
   const [carrinho,setCarrinho]=useState([]);
   const [modalPeso,setModalPeso]=useState(null);
-  const [modalPag,setModalPag]=useState(false);
   const [nomeCliente,setNomeCliente]=useState("");
 
   // Receber comanda rápida da aba Comandas
   useEffect(()=>{
     if(!comandaRapida) return;
-    if(comandaRapida.tipo==="fechar"){
-      // Abre direto no modal de pagamento do balcão
-      setModo("balcao");
-      setNomeCliente(comandaRapida.nomeCliente||"");
-      setModalPag(true);
-    } else if(comandaRapida.mesa){
+    if(comandaRapida.mesa){
       // Vai para aba mesas e seleciona a mesa
       setModo("mesa");
       const n=parseInt(comandaRapida.mesa);
@@ -623,37 +617,24 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     else setCarrinho(b=>b.map(i=>i.uid===item.uid?{...i,qtd:i.qtd+1}:i));
   };
 
-  const fecharMesa=(pagamentos)=>{
+  // Envia a mesa para a fila de pagamento do Caixa (os itens já vivem em `comandas`
+  // desde que o primeiro produto foi lançado — aqui só sinalizamos e navegamos).
+  const enviarMesaParaCaixa=()=>{
     if(!comanda||comanda.itens.length===0)return;
-    setComandas(cs=>cs.map(c=>c.id===comanda.id?{...c,status:"fechada",totalFinal:totalMesa,pagamentos,nomeCliente}:c));
-    setToast({msg:"🎉 Mesa "+mesaSel+" fechada — "+fmt(totalMesa),tipo:"ok"});
-    imprimirCupom({id:Date.now(),mesa:mesaSel,itens:comanda.itens,status:"fechada",hora:now(),data:today(),totalFinal:totalMesa,pagamentos,nomeCliente,tipo:"mesa"});
-    // Libera comanda física vinculada à mesa (por mesa OU por codigoComanda)
-    setComandasFisicas(cs=>cs.map(cf=>{
-      const porMesa   = cf.mesa===String(mesaSel)&&cf.status==="em_uso";
-      const porCodigo = comanda?.codigoComanda && cf.codigo===comanda.codigoComanda;
-      return (porMesa||porCodigo)?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf;
-    }));
-    setMesaSel(null);setModalPag(false);
+    setToast({msg:"📤 Mesa "+mesaSel+" enviada para o caixa — "+fmt(totalMesa),tipo:"ok"});
+    setMesaSel(null);
+    setAba("caixa");
   };
 
-  const finalizarBalcao=(pagamentos)=>{
-    setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}]);
-    setToast({msg:"🛍️ Balcão finalizado — "+fmt(totalBalcao),tipo:"ok"});
-    imprimirCupom({...{id:Date.now(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:totalBalcao,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}});
-    // Libera comanda física vinculada ao balcão (por nome OU por comandaRapida)
-    const codVinculado = sessionStorage.getItem("ultima_comanda_balcao");
-    setComandasFisicas(cs=>cs.map(cf=>{
-      const porNome   = cf.status==="em_uso"&&cf.nomeCliente===(nomeCliente||"Consumidor")&&!cf.mesa;
-      const porCodigo = codVinculado && cf.codigo===codVinculado;
-      return (porNome||porCodigo)?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[]}:cf;
-    }));
-    sessionStorage.removeItem("ultima_comanda_balcao");
-    setCarrinho([]);setNomeCliente("");setModalPag(false);
+  // Envia o carrinho do balcão para a fila de pagamento do Caixa.
+  const enviarBalcaoParaCaixa=()=>{
+    if(carrinho.length===0)return;
+    setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"aberta",hora:now(),data:today(),totalParcial:totalBalcao,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao"}]);
+    setToast({msg:"📤 Pedido enviado para o caixa — "+fmt(totalBalcao),tipo:"ok"});
+    setCarrinho([]);setNomeCliente("");
   };
 
   const itensAtivos=modo==="balcao"?carrinho:(comanda?.itens||[]);
-  const totalAtivo=modo==="balcao"?totalBalcao:totalMesa;
 
   const PainelItem=({itens,isMesa})=>(
     <div style={{flex:1,overflowY:"auto",maxHeight:340}}>
@@ -685,7 +666,6 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       {modalPeso&&<ModalPesagem produto={modalPeso} onConfirmar={confirmarPeso} onFechar={()=>setModalPeso(null)} />}
-      {modalPag&&<ModalPagamento total={totalAtivo} onConfirmar={modo==="balcao"?finalizarBalcao:fecharMesa} onFechar={()=>setModalPag(false)} />}
 
       {/* Toggle */}
       <div style={{display:"flex",gap:0,background:"#150c00",borderRadius:10,padding:3,width:"fit-content",border:"1px solid #5a3a00"}}>
@@ -726,7 +706,8 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
                 {comanda.itens.length>0&&(
                   <div style={{borderTop:"2px solid #c8860a",paddingTop:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:16,fontWeight:900,color:"#f0c040",marginBottom:8}}><span>Total</span><span>{fmt(totalMesa)}</span></div>
-                    <button style={S.btnOk} onClick={()=>setModalPag(true)}>💳 Fechar Conta</button>
+                    <div style={{fontSize:11,color:"#8aee3a",marginBottom:8,textAlign:"center"}}>✓ Já visível no Caixa — pagamento é feito lá</div>
+                    <button style={S.btnOk} onClick={enviarMesaParaCaixa}>💳 Ir para o Caixa (Pagamento)</button>
                   </div>
                 )}
               </div>
@@ -768,27 +749,12 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
         {modo==="balcao"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{...S.card,flex:1,display:"flex",flexDirection:"column",gap:8}}>
-              {/* Fila de pedidos do balcão enviados pelo atendente */}
-              {carrinho.length===0&&comandas.filter(c=>c.tipo==="balcao"&&c.status==="aberta"&&c.codigoComanda).length>0&&(
-                <div style={{marginBottom:10}}>
-                  <div style={{fontSize:13,fontWeight:700,color:"#8aee3a",marginBottom:8}}>📤 Pedidos aguardando pagamento:</div>
-                  {comandas.filter(x=>x.tipo==="balcao"&&x.status==="aberta"&&x.codigoComanda).map(x=>(
-                    <div key={x.id} onClick={()=>{setCarrinho(x.itens||[]);setNomeCliente(x.nomeCliente||"");}} style={{padding:"8px 12px",borderRadius:8,background:"#0d2a0d",border:"1px solid #2a6a2a",cursor:"pointer",marginBottom:6}}>
-                      <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}>
-                        <span style={{color:"#8aee3a",fontWeight:700}}>🎫 {x.codigoComanda} — {x.nomeCliente}</span>
-                        <span style={{color:"#f0c040",fontWeight:700}}>{fmt(x.totalParcial||0)}</span>
-                      </div>
-                      <div style={{fontSize:11,color:"#4a6a4a"}}>{x.hora} · {(x.itens||[]).length} itens · toque para cobrar</div>
-                    </div>
-                  ))}
-                </div>
-              )}
               <div style={S.sT()}>🧺 Carrinho</div>
               <PainelItem itens={carrinho} isMesa={false} />
               {carrinho.length>0&&(
                 <div style={{borderTop:"2px solid #c8860a",paddingTop:10}}>
                   <div style={{display:"flex",justifyContent:"space-between",fontSize:16,fontWeight:900,color:"#f0c040",marginBottom:8}}><span>Total</span><span>{fmt(totalBalcao)}</span></div>
-                  <button style={S.btnOk} onClick={()=>setModalPag(true)}>💳 Finalizar Venda</button>
+                  <button style={S.btnOk} onClick={enviarBalcaoParaCaixa}>📤 Enviar para o Caixa</button>
                 </div>
               )}
             </div>
@@ -2194,13 +2160,17 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   const [suprimento,setSuprimento]=useState("");
   const [pedidoPag,setPedidoPag]=useState(null); // pedido em aberto selecionado para cobrar
 
-  // ── Fila de pedidos aguardando pagamento (vindos do Atendente/Leitor) ──
+  // ── Fila de pedidos aguardando pagamento (vindos do Atendente/Leitor/Comanda) ──
+  // Total sempre calculado a partir dos itens ao vivo, nunca de um totalParcial
+  // travado — assim uma mesa que ganha mais itens depois de aparecer aqui
+  // continua mostrando o valor certo.
+  const calcPedidoTotal = (p) => (p.itens||[]).reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0);
   const pendentes = comandas.filter(c=>c.status==="aberta"&&(c.itens||[]).length>0);
-  const totalPendentes = pendentes.reduce((s,p)=>s+(p.totalParcial||0),0);
+  const totalPendentes = pendentes.reduce((s,p)=>s+calcPedidoTotal(p),0);
 
   const finalizarPedidoPendente = (pagamentos) => {
     if(!pedidoPag) return;
-    const totalPedido = pedidoPag.totalParcial || (pedidoPag.itens||[]).reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0);
+    const totalPedido = calcPedidoTotal(pedidoPag);
     setComandas(cs=>cs.map(c=>c.id===pedidoPag.id?{...c,status:"fechada",totalFinal:totalPedido,pagamentos}:c));
     imprimirCupom({
       id:Date.now(), mesa:pedidoPag.mesa||"Balcão", itens:pedidoPag.itens,
@@ -2314,7 +2284,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {pedidoPag&&<ModalPagamento total={pedidoPag.totalParcial||(pedidoPag.itens||[]).reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0)} onConfirmar={finalizarPedidoPendente} onFechar={()=>setPedidoPag(null)} />}
+      {pedidoPag&&<ModalPagamento total={calcPedidoTotal(pedidoPag)} onConfirmar={finalizarPedidoPendente} onFechar={()=>setPedidoPag(null)} />}
 
       {/* Fila de pedidos aguardando pagamento — vindos do Atendente/Leitor */}
       {pendentes.length>0&&(
@@ -2330,7 +2300,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
                   <span style={{fontWeight:700,color:"#f0c040",fontSize:13}}>
                     {p.mesa&&p.mesa!=="Balcão"?"🍽️ Mesa "+p.mesa:"🛍️ Balcão"}{p.codigoComanda?" · 🎫 "+p.codigoComanda:""}
                   </span>
-                  <span style={{fontSize:15,fontWeight:900,color:"#8aee3a"}}>{fmt(p.totalParcial||0)}</span>
+                  <span style={{fontSize:15,fontWeight:900,color:"#8aee3a"}}>{fmt(calcPedidoTotal(p))}</span>
                 </div>
                 <div style={{fontSize:11,color:"#c8a060"}}>{p.nomeCliente||"Consumidor"} · {(p.itens||[]).length} itens · {p.hora}</div>
                 <div style={{marginTop:8}}>
@@ -2632,7 +2602,7 @@ export default function App(){
       </header>
       <main style={S.main}>
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
-        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} />}
+        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} />}
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
