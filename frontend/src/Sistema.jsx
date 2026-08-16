@@ -1053,14 +1053,20 @@ const gerarCupom = (venda, nomeEstabelecimento="PADARIA XV") => {
 };
 
 const imprimirCupom = (venda, nomeEstabelecimento) => {
-  const texto = gerarCupom(venda, nomeEstabelecimento);
-  const win = window.open("","_blank","width=320,height=600");
-  if(!win) { alert(texto); return; }
-  win.document.write(
-    '<html><head><title>Cupom</title><style>body { font-family: "Courier New", monospace; font-size: 12px; margin: 8px; white-space: pre; } @media print { button { display:none; } }</style></head><body><pre>' + texto + '</pre><br/><button onclick="window.print();window.close();" style="width:100%;padding:8px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button></body></html>'
-  );
-  win.document.close();
-  setTimeout(()=>win.print(), 500);
+  // Blindado: em navegadores/webviews que bloqueiam pop-ups, window.open/print
+  // pode travar a aba principal. Nunca deixamos essa função lançar erro nem
+  // segurar a thread principal — a impressão é sempre manual (botão no popup).
+  try {
+    const texto = gerarCupom(venda, nomeEstabelecimento);
+    const win = window.open("","_blank","width=320,height=600");
+    if(!win || win.closed) { return; }
+    win.document.write(
+      '<html><head><title>Cupom</title><style>body { font-family: "Courier New", monospace; font-size: 12px; margin: 8px; white-space: pre; } @media print { button { display:none; } }</style></head><body><pre>' + texto + '</pre><br/><button onclick="window.print();window.close();" style="width:100%;padding:8px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button></body></html>'
+    );
+    win.document.close();
+  } catch(err) {
+    console.error("Falha ao abrir cupom para impressão:", err);
+  }
 };
 
 
@@ -1084,15 +1090,19 @@ const qrUrlComanda = (codigo) =>
 
 // Imprime lote de comandas com QR Code
 const imprimirLoteComandas = (comandas, nomeEstab="PADARIA XV", subtitulo="Apresente ao atendente") => {
-  const win = window.open("", "_blank", "width=1000,height=800");
-  if (!win) return;
+  try {
+    const win = window.open("", "_blank", "width=1000,height=800");
+    if (!win || win.closed) return;
 
-  const itens = comandas.map(c => {
-    return '<div class="comanda"><div class="header-comanda"><span class="logo-icon">🥖</span><span class="nome-estab">' + nomeEstab + '</span></div><div class="numero">' + c.codigo + '</div><div class="qr-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=' + encodeURIComponent("COMANDA:"+c.codigo) + '" width="130" height="130" /></div><div class="sub">' + subtitulo + '</div><div class="linha-pontilhada">- - - - - - - - - - - - - -</div></div>';
-  }).join("");
+    const itens = comandas.map(c => {
+      return '<div class="comanda"><div class="header-comanda"><span class="logo-icon">🥖</span><span class="nome-estab">' + nomeEstab + '</span></div><div class="numero">' + c.codigo + '</div><div class="qr-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=' + encodeURIComponent("COMANDA:"+c.codigo) + '" width="130" height="130" /></div><div class="sub">' + subtitulo + '</div><div class="linha-pontilhada">- - - - - - - - - - - - - -</div></div>';
+    }).join("");
 
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comandas - ' + nomeEstab + '</title><style>* { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: "Arial", sans-serif; background: #f5f0e8; padding: 16px; } .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; background: #2d1a00; padding: 12px 16px; border-radius: 10px; } .toolbar h2 { color: #f0c040; font-size: 16px; flex:1; } .toolbar button { padding: 8px 18px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; } .btn-print { background: #c8860a; color: #fff; } .btn-info { background: #1a5a00; color: #b8ffb8; } .info-box { background: #fff8e8; border: 1px solid #c8860a; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #5a3a00; } .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; } .comanda { background: #ffffff; border: 2px dashed #c8860a; border-radius: 10px; padding: 12px 10px 8px; text-align: center; break-inside: avoid; page-break-inside: avoid; box-shadow: 0 2px 6px rgba(0,0,0,0.08); } .header-comanda { display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 4px; } .logo-icon { font-size: 14px; } .nome-estab { font-size: 10px; font-weight: bold; color: #8B4513; text-transform: uppercase; letter-spacing: 0.5px; } .numero { font-size: 36px; font-weight: 900; color: #2d1a00; letter-spacing: 2px; margin: 4px 0; font-family: "Courier New", monospace; } .qr-wrap { display: flex; justify-content: center; margin: 6px 0; background: #fff; border-radius: 6px; padding: 4px; border: 1px solid #f0e8d0; } .qr-wrap img { display: block; } .sub { font-size: 9px; color: #8B4513; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; } .linha-pontilhada { font-size: 9px; color: #ddd; margin-top: 6px; overflow: hidden; } @media print { body { background: #fff; padding: 8px; } .toolbar { display: none; } .info-box { display: none; } .comanda { box-shadow: none; border-color: #aaa; } .grade { gap: 8px; } } @page { margin: 10mm; }</style></head><body><div class="toolbar"><h2>🎫 Catálogo de Comandas — ' + nomeEstab + ' (' + comandas.length + ' unidades)</h2><button class="btn-info" onclick="this.closest(\'.toolbar\').nextElementSibling.style.display=this.closest(\'.toolbar\').nextElementSibling.style.display===\'none\'?\'block\':\'none\'">ℹ️ Instruções</button><button class="btn-print" onclick="window.print()">🖨️ Imprimir Tudo</button></div><div class="info-box"><strong>📋 Instruções de uso:</strong> Imprima esta página em papel A4 · Recorte cada comanda pela linha pontilhada · Entregue uma comanda física para cada cliente · O atendente digita ou escaneia o número para abrir o pedido no sistema.</div><div class="grade">' + itens + '</div></body></html>');
-  win.document.close();
+    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comandas - ' + nomeEstab + '</title><style>* { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: "Arial", sans-serif; background: #f5f0e8; padding: 16px; } .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; background: #2d1a00; padding: 12px 16px; border-radius: 10px; } .toolbar h2 { color: #f0c040; font-size: 16px; flex:1; } .toolbar button { padding: 8px 18px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; } .btn-print { background: #c8860a; color: #fff; } .btn-info { background: #1a5a00; color: #b8ffb8; } .info-box { background: #fff8e8; border: 1px solid #c8860a; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #5a3a00; } .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; } .comanda { background: #ffffff; border: 2px dashed #c8860a; border-radius: 10px; padding: 12px 10px 8px; text-align: center; break-inside: avoid; page-break-inside: avoid; box-shadow: 0 2px 6px rgba(0,0,0,0.08); } .header-comanda { display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 4px; } .logo-icon { font-size: 14px; } .nome-estab { font-size: 10px; font-weight: bold; color: #8B4513; text-transform: uppercase; letter-spacing: 0.5px; } .numero { font-size: 36px; font-weight: 900; color: #2d1a00; letter-spacing: 2px; margin: 4px 0; font-family: "Courier New", monospace; } .qr-wrap { display: flex; justify-content: center; margin: 6px 0; background: #fff; border-radius: 6px; padding: 4px; border: 1px solid #f0e8d0; } .qr-wrap img { display: block; } .sub { font-size: 9px; color: #8B4513; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; } .linha-pontilhada { font-size: 9px; color: #ddd; margin-top: 6px; overflow: hidden; } @media print { body { background: #fff; padding: 8px; } .toolbar { display: none; } .info-box { display: none; } .comanda { box-shadow: none; border-color: #aaa; } .grade { gap: 8px; } } @page { margin: 10mm; }</style></head><body><div class="toolbar"><h2>🎫 Catálogo de Comandas — ' + nomeEstab + ' (' + comandas.length + ' unidades)</h2><button class="btn-info" onclick="this.closest(\'.toolbar\').nextElementSibling.style.display=this.closest(\'.toolbar\').nextElementSibling.style.display===\'none\'?\'block\':\'none\'">ℹ️ Instruções</button><button class="btn-print" onclick="window.print()">🖨️ Imprimir Tudo</button></div><div class="info-box"><strong>📋 Instruções de uso:</strong> Imprima esta página em papel A4 · Recorte cada comanda pela linha pontilhada · Entregue uma comanda física para cada cliente · O atendente digita ou escaneia o número para abrir o pedido no sistema.</div><div class="grade">' + itens + '</div></body></html>');
+    win.document.close();
+  } catch(err) {
+    console.error("Falha ao abrir lote de comandas para impressão:", err);
+  }
 };
 
 // ─── LEITOR DE QR CODE POR CÂMERA ────────────────────────────────────────────
