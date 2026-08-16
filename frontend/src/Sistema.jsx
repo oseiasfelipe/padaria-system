@@ -1096,7 +1096,7 @@ const imprimirCupom = (venda, nomeEstabelecimento) => {
     const win = window.open("","_blank","width=320,height=600");
     if(!win || win.closed) { return; }
     win.document.write(
-      '<html><head><title>Cupom</title><style>body { font-family: "Courier New", monospace; font-size: 12px; margin: 8px; white-space: pre; } @media print { button { display:none; } }</style></head><body><pre>' + texto + '</pre><br/><button onclick="window.print();window.close();" style="width:100%;padding:8px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button></body></html>'
+      '<html><head><title>Cupom</title><style>@page { size: 80mm auto; margin: 3mm; } * { box-sizing: border-box; } body { font-family: "Courier New", monospace; font-size: 12px; line-height: 1.35; margin: 0 auto; padding: 8px; width: 80mm; white-space: pre; } @media print { button { display:none; } body { padding: 0; } }</style></head><body><pre>' + texto + '</pre><br/><button onclick="window.print();window.close();" style="width:100%;padding:8px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button></body></html>'
     );
     win.document.close();
   } catch(err) {
@@ -2221,9 +2221,11 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
       status:"fechada", hora:now(), data:today(), totalFinal:totalPedido, pagamentos,
       nomeCliente:pedidoPag.nomeCliente||"Consumidor", tipo:pedidoPag.tipo,
     });
-    // Libera a comanda física vinculada
+    // Marca a comanda física como "paga" (não libera direto) — assim ela conta
+    // em "Pagas/Fechadas" até o atendente confirmar a devolução física e liberar
+    // manualmente pela aba Comandas.
     if(pedidoPag.codigoComanda){
-      setComandasFisicas(cs=>cs.map(cf=>cf.codigo===pedidoPag.codigoComanda?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[],itens:[],totalParcial:0}:cf));
+      setComandasFisicas(cs=>cs.map(cf=>cf.codigo===pedidoPag.codigoComanda?{...cf,status:"paga",itens:[],totalParcial:0}:cf));
     }
     setToast({msg:"✅ Pagamento recebido — "+fmt(totalPedido),tipo:"ok"});
     setPedidoPag(null);
