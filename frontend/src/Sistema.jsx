@@ -723,7 +723,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
 }
 
 // ─── COMANDA DIGITAL (PADARIA) ────────────────────────────────────────────────
-function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{},setAba=()=>{}}){
+function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{},setAba=()=>{},cancelarComanda=()=>{}}){
   const [modo,setModo]=useState("balcao");
   const [mesaSel,setMesaSel]=useState(null);
   const [carrinho,setCarrinho]=useState([]);
@@ -845,6 +845,27 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     setCarrinho([]);setNomeCliente("");setCodigoBalcaoAtual(null);
   };
 
+  // Cliente desistiu da compra — cancela a mesa aberta e libera a comanda física vinculada
+  const cancelarMesa=()=>{
+    if(!comanda)return;
+    if(!window.confirm("Cancelar o atendimento da Mesa "+mesaSel+"? Os itens lançados serão perdidos."))return;
+    cancelarComanda(comanda.codigoComanda, mesaSel);
+    setToast({msg:"🗑️ Mesa "+mesaSel+" cancelada",tipo:"err"});
+    setMesaSel(null);
+  };
+
+  // Cliente desistiu antes de enviar para o caixa — limpa o carrinho de balcão
+  // e libera a comanda física vinculada (se houver).
+  const cancelarBalcao=()=>{
+    if(carrinho.length===0&&!codigoBalcaoAtual)return;
+    if(!window.confirm("Cancelar este pedido? Os itens do carrinho serão perdidos."))return;
+    if(codigoBalcaoAtual){
+      setComandasFisicas(cs=>cs.map(cf=>cf.codigo===codigoBalcaoAtual?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[],itens:[],totalParcial:0}:cf));
+    }
+    setCarrinho([]);setNomeCliente("");setCodigoBalcaoAtual(null);
+    setToast({msg:"🗑️ Pedido cancelado",tipo:"err"});
+  };
+
   const itensAtivos=modo==="balcao"?carrinho:(comanda?.itens||[]);
 
   const PainelItem=({itens,isMesa})=>(
@@ -918,8 +939,14 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
                   <div style={{borderTop:"2px solid #c8860a",paddingTop:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:16,fontWeight:900,color:"#f0c040",marginBottom:8}}><span>Total</span><span>{fmt(totalMesa)}</span></div>
                     <div style={{fontSize:11,color:"#8aee3a",marginBottom:8,textAlign:"center"}}>✓ Já visível no Caixa — pagamento é feito lá</div>
-                    <button style={S.btnOk} onClick={enviarMesaParaCaixa}>💳 Ir para o Caixa (Pagamento)</button>
+                    <div style={{display:"flex",gap:8}}>
+                      <button style={{...S.btnOk,flex:1}} onClick={enviarMesaParaCaixa}>💳 Ir para o Caixa (Pagamento)</button>
+                      <button style={S.btnD} onClick={cancelarMesa} title="Cancelar mesa">🗑️</button>
+                    </div>
                   </div>
+                )}
+                {comanda.itens.length===0&&(
+                  <button style={{...S.btnS,width:"100%"}} onClick={cancelarMesa}>🗑️ Cancelar / Fechar Mesa</button>
                 )}
               </div>
             )}
@@ -965,8 +992,14 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
               {carrinho.length>0&&(
                 <div style={{borderTop:"2px solid #c8860a",paddingTop:10}}>
                   <div style={{display:"flex",justifyContent:"space-between",fontSize:16,fontWeight:900,color:"#f0c040",marginBottom:8}}><span>Total</span><span>{fmt(totalBalcao)}</span></div>
-                  <button style={S.btnOk} onClick={enviarBalcaoParaCaixa}>📤 Enviar para o Caixa</button>
+                  <div style={{display:"flex",gap:8}}>
+                    <button style={{...S.btnOk,flex:1}} onClick={enviarBalcaoParaCaixa}>📤 Enviar para o Caixa</button>
+                    <button style={S.btnD} onClick={cancelarBalcao} title="Cancelar pedido">🗑️</button>
+                  </div>
                 </div>
+              )}
+              {carrinho.length===0&&codigoBalcaoAtual&&(
+                <button style={{...S.btnS,width:"100%"}} onClick={cancelarBalcao}>🗑️ Cancelar Comanda {codigoBalcaoAtual}</button>
               )}
             </div>
           </div>
@@ -1458,7 +1491,7 @@ function CameraScanner({ onScan, onFechar }) {
 }
 
 // ─── LEITOR DE STATUS DE COMANDA ─────────────────────────────────────────────
-function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComandaRapida, setToast }) {
+function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComandaRapida, setToast, cancelarComanda=()=>{} }) {
   const [cod, setCod]       = useState("");
   const [resultado, setResultado] = useState(null);
   const [mostrarCam, setMostrarCam] = useState(false);
@@ -1547,6 +1580,12 @@ function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComanda
                       if(setAba) setAba("caixa");
                       setResultado(null);
                     }}>💳 Ir para o Caixa (Pagamento)</button>
+                    <button style={S.btnD} onClick={()=>{
+                      if(!window.confirm("Cancelar o atendimento da comanda "+resultado.codigo+"? Os itens lançados serão perdidos.")) return;
+                      cancelarComanda(resultado.codigo, resultado.mesa?parseInt(resultado.mesa):undefined);
+                      setResultado(null);
+                      setToast({msg:"🗑️ Comanda "+resultado.codigo+" cancelada",tipo:"err"});
+                    }}>🗑️ Cancelar Atendimento</button>
                   </>
                 )}
                 {resultado.status==="paga" && (
@@ -1566,7 +1605,7 @@ function LeitorComanda({ comandasFisicas, setComandasFisicas, setAba, setComanda
   );
 }
 
-function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba, setComandaRapida }) {
+function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba, setComandaRapida, cancelarComanda=()=>{} }) {
 
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [buscaCodigo, setBuscaCodigo]   = useState("");
@@ -1808,6 +1847,12 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
                     imprimirLoteComandas([comandaSel]);
                     setToast({ msg: "🖨️ Imprimindo comanda " + comandaSel.codigo, tipo: "info" });
                   }}>🖨️ Reimprimir QR Code</button>
+                  <button style={{ ...S.btnD, fontSize: 13 }} onClick={() => {
+                    if(!window.confirm("Cancelar o atendimento da comanda "+comandaSel.codigo+"? Os itens lançados serão perdidos.")) return;
+                    cancelarComanda(comandaSel.codigo, comandaSel.mesa?parseInt(comandaSel.mesa):undefined);
+                    setComandaSel(null);
+                    setToast({ msg: "🗑️ Comanda " + comandaSel.codigo + " cancelada", tipo: "err" });
+                  }}>🗑️ Cancelar Atendimento</button>
                 </div>
               )}
               {comandaSel.status === "paga" && (
@@ -1850,7 +1895,7 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
 
 
 // ─── PDV TABLET (modo atendente otimizado) ───────────────────────────────────
-function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast, setComandasFisicas=()=>{}, comandasFisicas=[] }) {
+function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast, setComandasFisicas=()=>{}, comandasFisicas=[], cancelarComanda=()=>{} }) {
   const [etapa, setEtapa]           = useState("comanda");  // comanda | pedido | pagamento
   const [codComanda, setCodComanda] = useState("");
   const [comandaAtiva, setComandaAtiva] = useState(null);    // {codigo, tipo, mesa, nomeCliente}
@@ -2088,6 +2133,16 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
         <div style={{display:"flex",gap:8}}>
           <button style={{...S.btnS,fontSize:13}} onClick={()=>{setCarrinho([]);setComandaAtiva(null);setEtapa("comanda");}}>
             ← Voltar
+          </button>
+          <button style={{...S.btnD,fontSize:13}} onClick={()=>{
+            if(!window.confirm("Cancelar este atendimento? Os itens lançados serão perdidos.")) return;
+            if(comandaAtiva?.codigo&&!comandaAtiva.codigo.startsWith("BAL-")&&!comandaAtiva.codigo.startsWith("MESA-")){
+              setComandasFisicas(cs=>cs.map(cf=>cf.codigo===comandaAtiva.codigo?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[],itens:[],totalParcial:0}:cf));
+            }
+            setCarrinho([]);setComandaAtiva(null);setEtapa("comanda");
+            setToast({msg:"🗑️ Atendimento cancelado",tipo:"err"});
+          }}>
+            🗑️ Cancelar
           </button>
         </div>
       </div>
@@ -2369,7 +2424,7 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
 }
 
 // ─── FECHAMENTO DE CAIXA ──────────────────────────────────────────────────────
-function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{},caixasFechados=[],setCaixasFechados=()=>{}}){
+function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{},caixasFechados=[],setCaixasFechados=()=>{},cancelarComanda=()=>{}}){
   const hoje=today();
   const [periodoFiltro,setPeriodoFiltro]=useState("hoje");
   const [dataInicio,setDataInicio]=useState(hoje);
@@ -2405,6 +2460,13 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
     }
     setToast({msg:"✅ Pagamento recebido — "+fmt(totalPedido),tipo:"ok"});
     setPedidoPag(null);
+  };
+
+  // Cliente desistiu da compra — cancela o pedido pendente e libera a comanda física
+  const cancelarPedidoPendente = (p) => {
+    if(!window.confirm("Cancelar este pedido? A comanda será liberada e os itens perdidos."))return;
+    cancelarComanda(p.codigoComanda, typeof p.mesa==="number"?p.mesa:undefined);
+    setToast({msg:"❌ Pedido cancelado",tipo:"err"});
   };
 
   const filtrarPorPeriodo=(lista,campo)=>{
@@ -2525,8 +2587,9 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
                   <span style={{fontSize:15,fontWeight:900,color:"#8aee3a"}}>{fmt(calcPedidoTotal(p))}</span>
                 </div>
                 <div style={{fontSize:11,color:"#c8a060"}}>{p.nomeCliente||"Consumidor"} · {(p.itens||[]).length} itens · {p.hora}</div>
-                <div style={{marginTop:8}}>
-                  <button style={{...S.btnOk}} onClick={(e)=>{e.stopPropagation();setPedidoPag(p);}}>💳 Cobrar</button>
+                <div style={{marginTop:8,display:"flex",gap:6}}>
+                  <button style={{...S.btnOk,flex:1}} onClick={(e)=>{e.stopPropagation();setPedidoPag(p);}}>💳 Cobrar</button>
+                  <button style={{...S.btnD}} onClick={(e)=>{e.stopPropagation();cancelarPedidoPendente(p);}} title="Cancelar pedido">❌</button>
                 </div>
               </div>
             ))}
@@ -2783,6 +2846,34 @@ export default function App(){
   const [caixasFechados,setCaixasFechados]=usePersistedState("caixasFechados", []);
   // Comanda rápida — vem da aba Comandas e pré-preenche a ComandaDigital
   const [comandaRapida,setComandaRapida]=useState(null);
+  // Usuário logado (via /auth/me do backend) — usado para liberar o logout só a admins
+  const [usuarioAtual,setUsuarioAtual]=useState(null);
+  useEffect(()=>{
+    apiFetch('/auth/me')
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{ if(data&&data.id) setUsuarioAtual(data); })
+      .catch(()=>{});
+  },[]);
+
+  // Cancela um pedido/comanda em aberto (cliente desistiu da compra):
+  // remove o pedido pendente da fila e libera a comanda física vinculada (se houver).
+  const cancelarComanda = (codigoComanda, mesaNum) => {
+    setComandas(cs=>cs.filter(c=>{
+      if(c.status!=="aberta") return true;
+      if(codigoComanda && c.codigoComanda===codigoComanda) return false;
+      if(!codigoComanda && mesaNum!=null && c.mesa===mesaNum) return false;
+      return true;
+    }));
+    if(codigoComanda){
+      setComandasFisicas(cs=>cs.map(cf=>cf.codigo===codigoComanda?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[],itens:[],totalParcial:0}:cf));
+    }
+  };
+
+  const handleLogout = () => {
+    if(!window.confirm("Deseja realmente sair do sistema?")) return;
+    sessionStorage.removeItem('padaria_token');
+    window.location.reload();
+  };
 
   const abertas=comandas.filter(c=>c.status==="aberta").length;
   const pendentesCaixa=comandas.filter(c=>c.status==="aberta"&&(c.itens||[]).length>0).length;
@@ -2822,19 +2913,25 @@ export default function App(){
             <button key={n.key} style={S.navBtn(aba===n.key,n.key==="pdv"?"g":"r")} onClick={()=>setAba(n.key)}>{n.label}</button>
           ))}
         </nav>
-        <div style={{fontSize:11,color:"#c8a060"}}>{today()}</div>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          {usuarioAtual&&<span style={{fontSize:11,color:"#c8a060"}}>👤 {usuarioAtual.nome}</span>}
+          {usuarioAtual?.perfil==="admin"&&(
+            <button onClick={handleLogout} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #5a1a00",background:"#2a0a00",color:"#ff8a6a",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🚪 Sair</button>
+          )}
+          <div style={{fontSize:11,color:"#c8a060"}}>{today()}</div>
+        </div>
       </header>
       <main style={S.main}>
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
-        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} />}
+        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
-        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} comandasFisicas={comandasFisicas} />}
-        {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} />}
-        {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} />}
-        {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={null} setToast={setToast} />}
-        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} caixasFechados={caixasFechados} setCaixasFechados={setCaixasFechados} />}
+        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} comandasFisicas={comandasFisicas} cancelarComanda={cancelarComanda} />}
+        {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} cancelarComanda={cancelarComanda} />}
+        {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} cancelarComanda={cancelarComanda} />}
+        {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={usuarioAtual} setToast={setToast} />}
+        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} caixasFechados={caixasFechados} setCaixasFechados={setCaixasFechados} cancelarComanda={cancelarComanda} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
       </main>
       {toast&&<Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)} />}
