@@ -7,11 +7,18 @@ const CATEGORIAS_INICIAIS = [
   { id:3, nome:"Salgados",    emoji:"🥐", tipo:"padaria"    },
   { id:4, nome:"Bebidas",     emoji:"☕", tipo:"padaria"    },
   { id:5, nome:"Doces",       emoji:"🍰", tipo:"padaria"    },
-  { id:6, nome:"Laticínios",  emoji:"🥛", tipo:"mercado"    },
-  { id:7, nome:"Mercearia",   emoji:"🛒", tipo:"mercado"    },
-  { id:8, nome:"Limpeza",     emoji:"🧹", tipo:"mercado"    },
-  { id:9, nome:"Higiene",     emoji:"🧴", tipo:"mercado"    },
-  { id:10,nome:"Frios Emb.",  emoji:"📦", tipo:"mercado"    },
+  { id:6, nome:"Laticínios",       emoji:"🥛", tipo:"mercado" },
+  { id:7, nome:"Mercearia",        emoji:"🛒", tipo:"mercado" },
+  { id:8, nome:"Limpeza",          emoji:"🧹", tipo:"mercado" },
+  { id:9, nome:"Higiene/Beleza",   emoji:"🧴", tipo:"mercado" },
+  { id:10,nome:"Frios Emb.",       emoji:"📦", tipo:"mercado" },
+  { id:11,nome:"Bebidas Alcoólicas",     emoji:"🍺", tipo:"mercado" },
+  { id:12,nome:"Bebidas Não Alcoólicas", emoji:"🥤", tipo:"mercado" },
+  { id:13,nome:"Biscoitos/Snacks", emoji:"🍪", tipo:"mercado" },
+  { id:14,nome:"Congelados",       emoji:"🧊", tipo:"mercado" },
+  { id:15,nome:"Sorvetes",         emoji:"🍦", tipo:"mercado" },
+  { id:16,nome:"Saudáveis",        emoji:"🌾", tipo:"mercado" },
+  { id:17,nome:"Outros",           emoji:"🧺", tipo:"mercado" },
 ];
 
 const PRODUTOS_INICIAIS = [
@@ -22,17 +29,115 @@ const PRODUTOS_INICIAIS = [
   { id:4,  nome:"Presunto Cozido",    preco:32.00, categoriaId:2, tipo:"padaria", vendaPeso:true,  estoque:null,  codbarra:"" },
   { id:5,  nome:"Coxinha",            preco:5.00,  categoriaId:3, tipo:"padaria", vendaPeso:false, estoque:null,  codbarra:"" },
   { id:6,  nome:"Café Expresso",      preco:6.00,  categoriaId:4, tipo:"padaria", vendaPeso:false, estoque:null,  codbarra:"" },
-  // Mercadoria (com estoque e código de barras)
-  { id:7,  nome:"Leite Integral 1L",  preco:4.80,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:48,  codbarra:"7891234560010" },
-  { id:8,  nome:"Iogurte Natural",    preco:6.50,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:24,  codbarra:"7891234560027" },
-  { id:9,  nome:"Achocolatado 200ml", preco:3.20,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:60,  codbarra:"7891234560034" },
-  { id:10, nome:"Arroz 5kg",          preco:28.90, categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:30,  codbarra:"7891234560041" },
-  { id:11, nome:"Feijão Carioca 1kg", preco:8.50,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:40,  codbarra:"7891234560058" },
-  { id:12, nome:"Açúcar Cristal 1kg", preco:5.90,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:35,  codbarra:"7891234560065" },
-  { id:13, nome:"Detergente 500ml",   preco:2.50,  categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:50,  codbarra:"7891234560072" },
-  { id:14, nome:"Sabão em Pó 1kg",    preco:12.90, categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:20,  codbarra:"7891234560089" },
-  { id:15, nome:"Shampoo 350ml",      preco:14.50, categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:18,  codbarra:"7891234560096" },
-  { id:16, nome:"Presunto Emb. 200g", preco:9.90,  categoriaId:10,tipo:"mercado", vendaPeso:false, estoque:22,  codbarra:"7891234560102" },
+
+  // ── Laticínios (6) ──
+  { id:100, nome:"Leite Integral 1L",       preco:4.80,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:48, codbarra:"7891234560010" },
+  { id:101, nome:"Iogurte Natural",         preco:6.50,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:24, codbarra:"7891234560027" },
+  { id:102, nome:"Achocolatado 200ml",      preco:3.20,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:60, codbarra:"7891234560034" },
+  { id:103, nome:"Leite Semidesnatado 1L",  preco:9.98,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560111" },
+  { id:104, nome:"Leite Desnatado 1L",      preco:9.98,  categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:35, codbarra:"7891234560128" },
+  { id:105, nome:"Manteiga Lata 200g",      preco:25.89, categoriaId:6, tipo:"mercado", vendaPeso:false, estoque:15, codbarra:"7891234560135" },
+
+  // ── Mercearia (10) ──
+  { id:110, nome:"Arroz Branco 1kg",          preco:28.90, categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560041" },
+  { id:111, nome:"Feijão Carioca 1kg",        preco:8.50,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560058" },
+  { id:112, nome:"Açúcar Cristal 1kg",        preco:5.90,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:35, codbarra:"7891234560065" },
+  { id:113, nome:"Café Tradicional 250g",     preco:27.90, categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560142" },
+  { id:114, nome:"Óleo de Soja 900ml",        preco:13.98, categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:25, codbarra:"7891234560159" },
+  { id:115, nome:"Macarrão Instantâneo",      preco:4.79,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:50, codbarra:"7891234560166" },
+  { id:116, nome:"Molho Shoyu de Soja",       preco:9.90,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:22, codbarra:"7891234560173" },
+  { id:117, nome:"Extrato de Tomate 130g",    preco:6.35,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560180" },
+  { id:118, nome:"Sal Refinado 1kg",          preco:5.97,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560197" },
+  { id:119, nome:"Fermento em Pó 100g",       preco:5.98,  categoriaId:7, tipo:"mercado", vendaPeso:false, estoque:18, codbarra:"7891234560203" },
+
+  // ── Limpeza (8) ──
+  { id:130, nome:"Esponja de Aço 60g",        preco:5.19,  categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:50, codbarra:"7891234560072" },
+  { id:131, nome:"Detergente Líquido 500ml",  preco:3.89,  categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:60, codbarra:"7891234560089" },
+  { id:132, nome:"Amaciante Concentrado 1L",  preco:18.95, categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560210" },
+  { id:133, nome:"Sabão Líquido 1,8L",        preco:21.49, categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:15, codbarra:"7891234560227" },
+  { id:134, nome:"Desinfetante 500ml",        preco:10.49, categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560234" },
+  { id:135, nome:"Limpador Multiuso 500ml",   preco:8.97,  categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:35, codbarra:"7891234560241" },
+  { id:136, nome:"Água Sanitária 1L",         preco:6.39,  categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:25, codbarra:"7891234560258" },
+  { id:137, nome:"Sacos de Lixo 50L c/10",    preco:9.97,  categoriaId:8, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560265" },
+
+  // ── Higiene/Beleza (9) ──
+  { id:150, nome:"Papel Higiênico Folha Dupla c/4", preco:10.46, categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:60, codbarra:"7891234560096" },
+  { id:151, nome:"Creme Dental 90g",                preco:7.89,  categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:45, codbarra:"7891234560272" },
+  { id:152, nome:"Escova Dental",                   preco:7.39,  categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560289" },
+  { id:153, nome:"Sabonete 90g",                    preco:7.95,  categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:50, codbarra:"7891234560296" },
+  { id:154, nome:"Absorvente Noturno c/8",          preco:12.90, categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:24, codbarra:"7891234560302" },
+  { id:155, nome:"Shampoo 350ml",                   preco:18.89, categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:18, codbarra:"7891234560319" },
+  { id:156, nome:"Desodorante Aerosol",             preco:19.98, categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:22, codbarra:"7891234560326" },
+  { id:157, nome:"Aparelho de Barbear",             preco:7.22,  categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:35, codbarra:"7891234560333" },
+  { id:158, nome:"Curativo Adesivo c/10",           preco:16.59, categoriaId:9, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560340" },
+
+  // ── Frios Emb. (1) ──
+  { id:170, nome:"Presunto Emb. 200g", preco:9.90, categoriaId:10, tipo:"mercado", vendaPeso:false, estoque:22, codbarra:"7891234560102" },
+
+  // ── Bebidas Alcoólicas (8) ──
+  { id:180, nome:"Cerveja Heineken Long Neck 330ml", preco:13.75, categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:60, codbarra:"7891234560357" },
+  { id:181, nome:"Cerveja Budweiser Long Neck 330ml",preco:10.96, categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:50, codbarra:"7891234560364" },
+  { id:182, nome:"Cerveja Corona Long Neck 330ml",   preco:13.56, categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560371" },
+  { id:183, nome:"Cerveja Stella Artois 330ml",      preco:12.25, categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:45, codbarra:"7891234560388" },
+  { id:184, nome:"Cerveja Antarctica Original 350ml",preco:7.95,  categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:70, codbarra:"7891234560395" },
+  { id:185, nome:"Vodka Smirnoff Ice 275ml",         preco:13.96, categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560401" },
+  { id:186, nome:"Whisky Jack Daniels & Cola 269ml", preco:17.48, categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560418" },
+  { id:187, nome:"Chopp Draft Red Forbes 600ml",     preco:19.96, categoriaId:11, tipo:"mercado", vendaPeso:false, estoque:12, codbarra:"7891234560425" },
+
+  // ── Bebidas Não Alcoólicas (10) ──
+  { id:200, nome:"Água Mineral Sem Gás 500ml",   preco:4.49,  categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:80, codbarra:"7891234560432" },
+  { id:201, nome:"Refrigerante Cola Lata 220ml", preco:5.45,  categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:70, codbarra:"7891234560449" },
+  { id:202, nome:"Refrigerante Cola 1,5L",       preco:9.95,  categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560456" },
+  { id:203, nome:"Guaraná Antarctica Lata",      preco:6.35,  categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:60, codbarra:"7891234560463" },
+  { id:204, nome:"Chá Ice Tea Limão 1,5L",       preco:12.96, categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:25, codbarra:"7891234560470" },
+  { id:205, nome:"Isotônico Gatorade 500ml",     preco:6.97,  categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:35, codbarra:"7891234560487" },
+  { id:206, nome:"Energético Monster 473ml",     preco:16.98, categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560494" },
+  { id:207, nome:"Red Bull Energy Drink 250ml",  preco:14.85, categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:28, codbarra:"7891234560500" },
+  { id:208, nome:"Suco Del Valle Uva 290ml",     preco:7.98,  categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560517" },
+  { id:209, nome:"Água de Coco 200ml",           preco:6.95,  categoriaId:12, tipo:"mercado", vendaPeso:false, estoque:22, codbarra:"7891234560524" },
+
+  // ── Biscoitos/Snacks (10) ──
+  { id:220, nome:"Salgadinho Fofura 60g",       preco:4.90,  categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:50, codbarra:"7891234560531" },
+  { id:221, nome:"Batata Ruffles Original 104g",preco:13.69, categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560548" },
+  { id:222, nome:"Doritos Queijo Nacho",        preco:13.85, categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:28, codbarra:"7891234560555" },
+  { id:223, nome:"Cheetos Onda Requeijão",      preco:6.90,  categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:35, codbarra:"7891234560562" },
+  { id:224, nome:"Pringles Original 104g",      preco:19.79, categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560579" },
+  { id:225, nome:"Biscoito Recheado Chocolate", preco:5.46,  categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:45, codbarra:"7891234560586" },
+  { id:226, nome:"Biscoito Cream Cracker",      preco:5.79,  categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560593" },
+  { id:227, nome:"Cookies Chocolate 100g",      preco:8.69,  categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:25, codbarra:"7891234560609" },
+  { id:228, nome:"Amendoim Torrado 120g",       preco:12.97, categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:22, codbarra:"7891234560616" },
+  { id:229, nome:"Wafer Chocolate 140g",        preco:6.50,  categoriaId:13, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560623" },
+
+  // ── Congelados (7) ──
+  { id:240, nome:"Hot Pocket Bacon 145g",         preco:13.94, categoriaId:14, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560630" },
+  { id:241, nome:"Lasanha Bolonhesa 600g",        preco:27.96, categoriaId:14, tipo:"mercado", vendaPeso:false, estoque:15, codbarra:"7891234560647" },
+  { id:242, nome:"Pizza Calabresa Congelada",     preco:21.96, categoriaId:14, tipo:"mercado", vendaPeso:false, estoque:12, codbarra:"7891234560654" },
+  { id:243, nome:"Batata Palito Congelada",       preco:19.98, categoriaId:14, tipo:"mercado", vendaPeso:false, estoque:25, codbarra:"7891234560661" },
+  { id:244, nome:"Hambúrguer de Carne Bovina",    preco:9.85,  categoriaId:14, tipo:"mercado", vendaPeso:false, estoque:18, codbarra:"7891234560678" },
+  { id:245, nome:"Marmita Pronta Strogonoff",     preco:35.58, categoriaId:14, tipo:"mercado", vendaPeso:false, estoque:10, codbarra:"7891234560685" },
+  { id:246, nome:"Pão de Queijo Congelado",       preco:9.75,  categoriaId:14, tipo:"mercado", vendaPeso:false, estoque:22, codbarra:"7891234560692" },
+
+  // ── Sorvetes (6) ──
+  { id:260, nome:"Sorvete Napolitano 1,5L",  preco:32.98, categoriaId:15, tipo:"mercado", vendaPeso:false, estoque:12, codbarra:"7891234560708" },
+  { id:261, nome:"Sorvete Flocos 1,5L",      preco:34.98, categoriaId:15, tipo:"mercado", vendaPeso:false, estoque:10, codbarra:"7891234560715" },
+  { id:262, nome:"Açaí com Guaraná 700ml",   preco:31.90, categoriaId:15, tipo:"mercado", vendaPeso:false, estoque:15, codbarra:"7891234560722" },
+  { id:263, nome:"Picolé Brownie 90g",       preco:19.95, categoriaId:15, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560739" },
+  { id:264, nome:"Picolé Ovomaltine 90g",    preco:19.95, categoriaId:15, tipo:"mercado", vendaPeso:false, estoque:18, codbarra:"7891234560746" },
+  { id:265, nome:"Sorvete Doce de Leite",    preco:12.45, categoriaId:15, tipo:"mercado", vendaPeso:false, estoque:16, codbarra:"7891234560753" },
+
+  // ── Saudáveis (8) ──
+  { id:280, nome:"Barra de Cereal Cacau",     preco:3.14,  categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:60, codbarra:"7891234560760" },
+  { id:281, nome:"Biscoito Integral Cacau",   preco:9.29,  categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560777" },
+  { id:282, nome:"Granola Integral 500g",     preco:16.90, categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560784" },
+  { id:283, nome:"Snack de Queijo 25g",       preco:6.80,  categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:35, codbarra:"7891234560791" },
+  { id:284, nome:"Whey Protein Sachê 37g",    preco:13.54, categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:25, codbarra:"7891234560807" },
+  { id:285, nome:"Barra de Proteína 60g",     preco:17.80, categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:22, codbarra:"7891234560814" },
+  { id:286, nome:"Chips de Proteína 40g",     preco:16.85, categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:18, codbarra:"7891234560821" },
+  { id:287, nome:"Cookie Integral Chocolate", preco:14.77, categoriaId:16, tipo:"mercado", vendaPeso:false, estoque:20, codbarra:"7891234560838" },
+
+  // ── Outros (2) ──
+  { id:300, nome:"Prato Raso Descartável 10un", preco:3.15,  categoriaId:17, tipo:"mercado", vendaPeso:false, estoque:40, codbarra:"7891234560845" },
+  { id:301, nome:"Filme PVC 28x15",             preco:7.39,  categoriaId:17, tipo:"mercado", vendaPeso:false, estoque:30, codbarra:"7891234560852" },
 ];
 
 const MESAS_TOTAL = 12;
@@ -405,15 +510,36 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
   const [carrinho,setCarrinho]=useState([]);
   const [busca,setBusca]=useState("");
   const [codBarra,setCodBarra]=useState("");
-  const [catF,setCatF]=useState(0);
+  const [catSel,setCatSel]=useState(null); // null = tela de categorias (igual ao mercadinho)
+  const [pagina,setPagina]=useState(1);
+  const [ordenarPreco,setOrdenarPreco]=useState(null); // null | "asc" | "desc"
   const [modalPag,setModalPag]=useState(false);
   const [nomeCliente,setNomeCliente]=useState("");
   const cbRef=useRef();
+  const POR_PAGINA=9;
 
   const cats=categorias.filter(c=>c.tipo==="mercado");
-  const prods=produtos.filter(p=>p.tipo==="mercado"&&
-    (catF===0||p.categoriaId===catF)&&
-    (busca===""||p.nome.toLowerCase().includes(busca.toLowerCase())));
+  const buscando=busca.trim()!=="";
+  const catAtual=catSel?cats.find(c=>c.id===catSel):null;
+
+  // Todos os produtos de mercado, para busca/estoque
+  const todosMercado=produtos.filter(p=>p.tipo==="mercado");
+
+  // Lista base conforme o modo: buscando (todas categorias) ou dentro de uma categoria
+  let listaBase=[];
+  if(buscando) listaBase=todosMercado.filter(p=>p.nome.toLowerCase().includes(busca.toLowerCase()));
+  else if(catSel) listaBase=todosMercado.filter(p=>p.categoriaId===catSel);
+
+  const listaOrdenada=ordenarPreco
+    ? [...listaBase].sort((a,b)=>ordenarPreco==="asc"?a.preco-b.preco:b.preco-a.preco)
+    : listaBase;
+
+  const totalPaginas=Math.max(1,Math.ceil(listaOrdenada.length/POR_PAGINA));
+  const paginaSegura=Math.min(pagina,totalPaginas);
+  const prods=listaOrdenada.slice((paginaSegura-1)*POR_PAGINA,paginaSegura*POR_PAGINA);
+
+  // Reseta a página ao trocar de categoria, busca ou ordenação
+  useEffect(()=>{ setPagina(1); },[catSel,busca,ordenarPreco]);
 
   const total=carrinho.reduce((s,i)=>s+i.preco*i.qtd,0);
 
@@ -465,7 +591,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
 
       {/* Cardápio mercadoria */}
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {/* Barra dupla: cód barras + busca */}
+        {/* Barra dupla: cód barras + busca global */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:16}}>📷</span>
@@ -476,35 +602,85 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
           </div>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:16}}>🔍</span>
-            <input style={{...S.inp,paddingLeft:34}} placeholder="Buscar produto..." value={busca} onChange={e=>setBusca(e.target.value)} />
+            <input style={{...S.inp,paddingLeft:34}} placeholder="Procurar um produto..." value={busca} onChange={e=>setBusca(e.target.value)} />
           </div>
         </div>
 
-        {/* Categorias */}
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          <span style={catF===0?S.tagG:S.tag} onClick={()=>setCatF(0)}>Todos</span>
-          {cats.map(c=><span key={c.id} style={catF===c.id?S.tagG:S.tag} onClick={()=>setCatF(c.id)}>{c.emoji} {c.nome}</span>)}
-        </div>
+        {/* ── Tela de categorias (só aparece sem busca e sem categoria aberta) ── */}
+        {!buscando&&!catSel&&(
+          <div style={{...S.card,flex:1,overflowY:"auto"}}>
+            <div style={S.sT()}>🛒 Categorias</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+              {cats.map(c=>{
+                const qtdCat=todosMercado.filter(p=>p.categoriaId===c.id).length;
+                return(
+                  <div key={c.id} onClick={()=>setCatSel(c.id)} style={{padding:"16px 10px",borderRadius:14,cursor:"pointer",textAlign:"center",background:"#150c00",border:"1px solid #3d2200",transition:"all 0.15s"}}>
+                    <div style={{fontSize:30,marginBottom:6}}>{c.emoji}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:"#f5e6c8",lineHeight:1.3}}>{c.nome}</div>
+                    <div style={{fontSize:10,color:"#c8a060",marginTop:3}}>{qtdCat} itens</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-        {/* Grid produtos */}
-        <div style={{...S.grid4,overflowY:"auto",alignContent:"start"}}>
-          {prods.map(p=>{
-            const qtdC=carrinho.find(i=>i.id===p.id)?.qtd||0;
-            const semEstoque=p.estoque!==null&&p.estoque<=0;
-            return(
-              <div key={p.id} onClick={()=>!semEstoque&&addItem(p)} style={{padding:12,borderRadius:12,cursor:semEstoque?"not-allowed":"pointer",userSelect:"none",position:"relative",opacity:semEstoque?0.45:1,transition:"all 0.15s",background:qtdC>0?"#2a1800":"#150c00",border:qtdC>0?"2px solid #2a9a2a":"1px solid #2a2a4a"}}>
-                {qtdC>0&&<div style={{position:"absolute",top:6,right:6,background:"#2a9a2a",color:"#fff",borderRadius:"50%",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{qtdC}</div>}
-                {semEstoque&&<div style={{position:"absolute",top:6,left:6,...S.bdg("r")}}>SEM ESTOQUE</div>}
-                <div style={{fontSize:22,marginBottom:5}}>{categorias.find(c=>c.id===p.categoriaId)?.emoji||"📦"}</div>
-                <div style={{fontSize:11,fontWeight:600,color:"#f0f0f0",marginBottom:3,lineHeight:1.3}}>{p.nome}</div>
-                <div style={{fontSize:13,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}</div>
-                {p.estoque!==null&&<div style={{fontSize:10,color:p.estoque<=5?"#ff6a6a":"#c8a060",marginTop:2}}>Estq: {p.estoque}</div>}
-                {p.codbarra&&<div style={{fontSize:9,color:"#5a3a00",marginTop:1}}>{p.codbarra}</div>}
+        {/* ── Cabeçalho de categoria/busca + grid paginado ── */}
+        {(buscando||catSel)&&(
+          <div style={{...S.card,flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                {!buscando&&(
+                  <button onClick={()=>setCatSel(null)} style={{background:"transparent",border:"1px solid #5a3a00",borderRadius:"50%",width:32,height:32,color:"#c8a060",cursor:"pointer",fontSize:16}}>←</button>
+                )}
+                <div style={{fontSize:15,fontWeight:900,color:"#f0c040",letterSpacing:1,textTransform:"uppercase"}}>
+                  {buscando?"🔍 Resultados para \""+busca+"\"":catAtual?.emoji+" "+catAtual?.nome?.toUpperCase()}
+                </div>
               </div>
-            );
-          })}
-        </div>
+              <button onClick={()=>setOrdenarPreco(o=>o===null?"asc":o==="asc"?"desc":null)} style={{background:"transparent",border:"1px solid #5a3a00",borderRadius:9,padding:"6px 10px",color:"#c8a060",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:5}} title="Ordenar por preço">
+                ⚗️ {ordenarPreco==="asc"?"Menor preço":ordenarPreco==="desc"?"Maior preço":"Filtrar"}
+              </button>
+            </div>
+
+            {listaOrdenada.length===0?(
+              <div style={{color:"#5a3a00",textAlign:"center",padding:40,fontSize:13}}>Nenhum produto encontrado.</div>
+            ):(
+              <>
+                <div style={{...S.grid4,overflowY:"auto",alignContent:"start",flex:1}}>
+                  {prods.map(p=>{
+                    const qtdC=carrinho.find(i=>i.id===p.id)?.qtd||0;
+                    const semEstoque=p.estoque!==null&&p.estoque<=0;
+                    const catDoProd=categorias.find(c=>c.id===p.categoriaId);
+                    return(
+                      <div key={p.id} onClick={()=>!semEstoque&&addItem(p)} style={{padding:12,borderRadius:12,cursor:semEstoque?"not-allowed":"pointer",userSelect:"none",position:"relative",opacity:semEstoque?0.45:1,transition:"all 0.15s",background:qtdC>0?"#2a1800":"#150c00",border:qtdC>0?"2px solid #2a9a2a":"1px solid #2a2a4a"}}>
+                        {qtdC>0&&<div style={{position:"absolute",top:6,right:6,background:"#2a9a2a",color:"#fff",borderRadius:"50%",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{qtdC}</div>}
+                        {semEstoque&&<div style={{position:"absolute",top:6,left:6,...S.bdg("r")}}>SEM ESTOQUE</div>}
+                        {!semEstoque&&p.estoque!==null&&p.estoque<=8&&<div style={{position:"absolute",top:6,left:6,fontSize:9,color:"#ff8a4a",fontWeight:700}}>↓ POUCAS UNIDADES</div>}
+                        <div style={{fontSize:22,marginBottom:5}}>{catDoProd?.emoji||"📦"}</div>
+                        <div style={{fontSize:11,fontWeight:600,color:"#f0f0f0",marginBottom:3,lineHeight:1.3}}>{p.nome}</div>
+                        <div style={{fontSize:13,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}</div>
+                        {p.estoque!==null&&<div style={{fontSize:10,color:p.estoque<=5?"#ff6a6a":"#c8a060",marginTop:2}}>Estq: {p.estoque}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Paginação */}
+                {totalPaginas>1&&(
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:12,paddingTop:12,borderTop:"1px solid #3d2200"}}>
+                    <button disabled={paginaSegura<=1} onClick={()=>setPagina(p=>Math.max(1,p-1))} style={{...S.btnS,opacity:paginaSegura<=1?0.4:1,cursor:paginaSegura<=1?"not-allowed":"pointer"}}>‹ Anterior</button>
+                    {Array.from({length:totalPaginas},(_,i)=>i+1).map(n=>(
+                      <span key={n} onClick={()=>setPagina(n)} style={{...(n===paginaSegura?S.tagA:S.tag),minWidth:28,textAlign:"center",justifyContent:"center"}}>{n}</span>
+                    ))}
+                    <button disabled={paginaSegura>=totalPaginas} onClick={()=>setPagina(p=>Math.min(totalPaginas,p+1))} style={{...S.btnS,opacity:paginaSegura>=totalPaginas?0.4:1,cursor:paginaSegura>=totalPaginas?"not-allowed":"pointer"}}>Próxima ›</button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
+
 
       {/* Painel carrinho */}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
