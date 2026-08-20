@@ -1103,11 +1103,34 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias}){
             <div style={{display:"flex",flexDirection:"column",gap:11}}>
               <div><label style={S.lbl}>Nome</label><input style={S.inp} value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} placeholder="Nome do produto" /></div>
               <div>
-                <label style={S.lbl}>URL da imagem (opcional)</label>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  {form.imagem&&<img src={form.imagem} alt="" style={{width:38,height:38,borderRadius:8,objectFit:"cover",border:"1px solid #5a3a00",flexShrink:0}} onError={e=>{e.target.style.display="none";}} />}
-                  <input style={S.inp} value={form.imagem} onChange={e=>setForm({...form,imagem:e.target.value})} placeholder="https://... (cole o link da foto)" />
+                <label style={S.lbl}>Foto do produto (opcional)</label>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                  {form.imagem&&<img src={form.imagem} alt="" style={{width:44,height:44,borderRadius:8,objectFit:"cover",border:"1px solid #5a3a00",flexShrink:0}} onError={e=>{e.target.style.display="none";}} />}
+                  <label style={{...S.btnGr,textAlign:"center",cursor:"pointer",flex:1,margin:0}}>
+                    📷 {form.imagem?"Trocar foto":"Enviar foto do computador"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{display:"none"}}
+                      onChange={e=>{
+                        const file=e.target.files?.[0];
+                        if(!file) return;
+                        if(file.size>2*1024*1024){ // aviso simples acima de 2MB (ainda funciona, só fica pesado no navegador)
+                          if(!window.confirm("Essa imagem tem "+(file.size/1024/1024).toFixed(1)+"MB — arquivos grandes deixam o sistema mais lento. Usar mesmo assim?")) { e.target.value=""; return; }
+                        }
+                        const reader=new FileReader();
+                        reader.onload=ev=>setForm(f=>({...f,imagem:ev.target.result}));
+                        reader.readAsDataURL(file);
+                        e.target.value="";
+                      }}
+                    />
+                  </label>
+                  {form.imagem&&<button type="button" style={S.btnD} onClick={()=>setForm(f=>({...f,imagem:""}))} title="Remover foto">✕</button>}
                 </div>
+                <details>
+                  <summary style={{fontSize:10,color:"#c8a060",cursor:"pointer"}}>ou colar um link de imagem já hospedada</summary>
+                  <input style={{...S.inp,marginTop:6}} value={form.imagem} onChange={e=>setForm({...form,imagem:e.target.value})} placeholder="https://... (link direto de uma foto)" />
+                </details>
                 <div style={{fontSize:10,color:"#5a3a00",marginTop:3}}>Deixe em branco pra usar o emoji da categoria</div>
               </div>
               <div style={S.grid2}>
