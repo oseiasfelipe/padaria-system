@@ -3,6 +3,7 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const pool    = require('../config/db');
 const authMw  = require('../middlewares/auth');
+
 // POST /auth/login
 router.post('/login', async (req, res) => {
   const { email, senha } = req.body;
@@ -25,6 +26,7 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ erro: err.message });
   }
 });
+
 // GET /auth/me
 router.get('/me', authMw, async (req, res) => {
   try {
@@ -36,3 +38,5 @@ router.get('/me', authMw, async (req, res) => {
     res.status(500).json({ erro: err.message });
   }
 });
+
+module.exports = router;
