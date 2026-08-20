@@ -201,7 +201,7 @@ const S = {
   btnS:    { padding:"7px 13px", borderRadius:8, border:"1px solid #5a3a00", background:"transparent", color:"#c8a060", fontSize:12, cursor:"pointer", fontFamily:"inherit" },
   btnD:    { padding:"3px 9px", borderRadius:7, border:"none", background:"#5a1a00", color:"#ff6b35", fontSize:13, cursor:"pointer", fontFamily:"inherit" },
   btnOk:   { padding:"11px 18px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#1a5a00,#2a8a00)", color:"#b8ffb8", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", width:"100%" },
-  btnGr:   { padding:"10px 18px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#3a2000,#5a3400)", color:"#f0c040", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", border:"1px solid #c8860a" },
+  btnGr:   { padding:"10px 18px", borderRadius:9, background:"linear-gradient(135deg,#3a2000,#5a3400)", color:"#f0c040", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", border:"1px solid #c8860a" },
   tag:     { display:"inline-flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:20, border:"1px solid #5a3a00", background:"#2a1400", color:"#c8a060", fontSize:12, cursor:"pointer" },
   tagA:    { display:"inline-flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:20, border:"1px solid #c8860a", background:"#3a2000", color:"#f0c040", fontSize:12, cursor:"pointer" },
   tagG:    { display:"inline-flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:20, border:"1px solid #4a8a00", background:"#1a3000", color:"#8aee3a", fontSize:12, cursor:"pointer" },
@@ -656,7 +656,10 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
                         {qtdC>0&&<div style={{position:"absolute",top:6,right:6,background:"#2a9a2a",color:"#fff",borderRadius:"50%",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{qtdC}</div>}
                         {semEstoque&&<div style={{position:"absolute",top:6,left:6,...S.bdg("r")}}>SEM ESTOQUE</div>}
                         {!semEstoque&&p.estoque!==null&&p.estoque<=8&&<div style={{position:"absolute",top:6,left:6,fontSize:9,color:"#ff8a4a",fontWeight:700}}>↓ POUCAS UNIDADES</div>}
-                        <div style={{fontSize:22,marginBottom:5}}>{catDoProd?.emoji||"📦"}</div>
+                        {p.imagem
+                          ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:56,objectFit:"cover",borderRadius:8,marginBottom:5}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="block";}} />
+                          : null}
+                        <div style={{fontSize:22,marginBottom:5,display:p.imagem?"none":"block"}}>{catDoProd?.emoji||"📦"}</div>
                         <div style={{fontSize:11,fontWeight:600,color:"#f0f0f0",marginBottom:3,lineHeight:1.3}}>{p.nome}</div>
                         <div style={{fontSize:13,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}</div>
                         {p.estoque!==null&&<div style={{fontSize:10,color:p.estoque<=5?"#ff6a6a":"#c8a060",marginTop:2}}>Estq: {p.estoque}</div>}
@@ -974,7 +977,10 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
                 <div key={p.id} onClick={()=>(modo==="mesa"&&!comanda)?setToast({msg:"👆 Selecione uma mesa primeiro",tipo:"info"}):addPadaria(p)} style={{padding:12,borderRadius:12,cursor:"pointer",userSelect:"none",position:"relative",transition:"all 0.15s",background:tem?"#2a1400":"#150c00",border:tem?"2px solid #c8860a":"1px solid #3d2200"}}>
                   {p.vendaPeso&&<div style={{position:"absolute",top:6,left:6,...S.bdg("p"),fontSize:9}}>⚖️</div>}
                   {tem&&<div style={{position:"absolute",top:6,right:6,background:"#c8860a",color:"#1a0f00",borderRadius:7,padding:"1px 5px",fontSize:10,fontWeight:900}}>{p.vendaPeso?fmtKg(qtdP*1000):qtdU}</div>}
-                  <div style={{fontSize:24,marginBottom:5,marginTop:p.vendaPeso?10:0}}>{cat?.emoji||"🍞"}</div>
+                  {p.imagem
+                    ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:60,objectFit:"cover",borderRadius:8,marginBottom:5,marginTop:p.vendaPeso?10:0}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="block";}} />
+                    : null}
+                  <div style={{fontSize:24,marginBottom:5,marginTop:p.vendaPeso?10:0,display:p.imagem?"none":"block"}}>{cat?.emoji||"🍞"}</div>
                   <div style={{fontSize:11,fontWeight:600,color:"#f0f0f0",marginBottom:2,lineHeight:1.3}}>{p.nome}</div>
                   <div style={{fontSize:12,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}{p.vendaPeso?" /kg":""}</div>
                 </div>
@@ -1068,7 +1074,7 @@ function Estoque({produtos,setProdutos,categorias}){
 // ─── CADASTRO ─────────────────────────────────────────────────────────────────
 function Cadastro({produtos,setProdutos,categorias,setCategorias}){
   const [tab,setTab]=useState("produtos");
-  const [form,setForm]=useState({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:""});
+  const [form,setForm]=useState({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:"",imagem:""});
   const [formCat,setFormCat]=useState({nome:"",emoji:"🛒",tipo:"mercado"});
   const [editId,setEditId]=useState(null);
   const [filtro,setFiltro]=useState("todos");
@@ -1078,7 +1084,7 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias}){
     const novo={...form,preco:+form.preco,estoque:form.tipo==="mercado"?(form.estoque===""?0:+form.estoque):null,id:Date.now()};
     if(editId){setProdutos(p=>p.map(x=>x.id===editId?{...x,...novo}:x));setEditId(null);}
     else setProdutos(p=>[...p,novo]);
-    setForm({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:""});
+    setForm({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:"",imagem:""});
   };
   const editar=(p)=>{setForm({...p,preco:p.preco,estoque:p.estoque??""});setEditId(p.id);};
   const remover=(id)=>setProdutos(p=>p.filter(x=>x.id!==id));
@@ -1096,6 +1102,14 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias}){
             <div style={S.sT()}>{editId?"✏️ Editar":"➕ Novo"} Produto</div>
             <div style={{display:"flex",flexDirection:"column",gap:11}}>
               <div><label style={S.lbl}>Nome</label><input style={S.inp} value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} placeholder="Nome do produto" /></div>
+              <div>
+                <label style={S.lbl}>URL da imagem (opcional)</label>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  {form.imagem&&<img src={form.imagem} alt="" style={{width:38,height:38,borderRadius:8,objectFit:"cover",border:"1px solid #5a3a00",flexShrink:0}} onError={e=>{e.target.style.display="none";}} />}
+                  <input style={S.inp} value={form.imagem} onChange={e=>setForm({...form,imagem:e.target.value})} placeholder="https://... (cole o link da foto)" />
+                </div>
+                <div style={{fontSize:10,color:"#5a3a00",marginTop:3}}>Deixe em branco pra usar o emoji da categoria</div>
+              </div>
               <div style={S.grid2}>
                 <div><label style={S.lbl}>{form.vendaPeso?"Preço por kg":"Preço unit."} (R$)</label><input style={S.inp} type="number" step="0.01" value={form.preco} onChange={e=>setForm({...form,preco:e.target.value})} /></div>
                 <div><label style={S.lbl}>Tipo</label>
@@ -1126,7 +1140,7 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias}){
               )}
               <div style={{display:"flex",gap:8}}>
                 <button style={S.btnP} onClick={salvar}>{editId?"💾 Salvar":"➕ Adicionar"}</button>
-                {editId&&<button style={S.btnS} onClick={()=>{setEditId(null);setForm({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:""});}}>Cancelar</button>}
+                {editId&&<button style={S.btnS} onClick={()=>{setEditId(null);setForm({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:"",imagem:""});}}>Cancelar</button>}
               </div>
             </div>
           </div>
@@ -2162,7 +2176,10 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
               return(
                 <div key={p.id} onClick={()=>addItem(p)} style={ST.produto(qtd>0)}>
                   {qtd>0&&<div style={{position:"absolute",top:6,right:6,background:"#c8860a",color:"#1a0f00",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900}}>{qtd}</div>}
-                  <div style={{fontSize:28,marginBottom:4}}>{cat?.emoji||"🍞"}</div>
+                  {p.imagem
+                    ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:64,objectFit:"cover",borderRadius:8,marginBottom:4}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="block";}} />
+                    : null}
+                  <div style={{fontSize:28,marginBottom:4,display:p.imagem?"none":"block"}}>{cat?.emoji||"🍞"}</div>
                   <div style={{fontSize:12,fontWeight:700,color:"#f5e6c8",lineHeight:1.3}}>{p.nome}</div>
                   <div style={{fontSize:13,fontWeight:800,color:"#f0c040",marginTop:3}}>{fmt(p.preco)}{p.vendaPeso?" /kg":""}</div>
                 </div>
