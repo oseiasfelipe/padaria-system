@@ -201,7 +201,7 @@ const S = {
   btnS:    { padding:"7px 13px", borderRadius:8, border:"1px solid #5a3a00", background:"transparent", color:"#c8a060", fontSize:12, cursor:"pointer", fontFamily:"inherit" },
   btnD:    { padding:"3px 9px", borderRadius:7, border:"none", background:"#5a1a00", color:"#ff6b35", fontSize:13, cursor:"pointer", fontFamily:"inherit" },
   btnOk:   { padding:"11px 18px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#1a5a00,#2a8a00)", color:"#b8ffb8", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", width:"100%" },
-  btnGr:   { padding:"10px 18px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#3a2000,#5a3400)", color:"#f0c040", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", border:"1px solid #c8860a" },
+  btnGr:   { padding:"10px 18px", borderRadius:9, background:"linear-gradient(135deg,#3a2000,#5a3400)", color:"#f0c040", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", border:"1px solid #c8860a" },
   tag:     { display:"inline-flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:20, border:"1px solid #5a3a00", background:"#2a1400", color:"#c8a060", fontSize:12, cursor:"pointer" },
   tagA:    { display:"inline-flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:20, border:"1px solid #c8860a", background:"#3a2000", color:"#f0c040", fontSize:12, cursor:"pointer" },
   tagG:    { display:"inline-flex", alignItems:"center", gap:4, padding:"4px 11px", borderRadius:20, border:"1px solid #4a8a00", background:"#1a3000", color:"#8aee3a", fontSize:12, cursor:"pointer" },
