@@ -1021,7 +1021,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({produtos,setProdutos,categorias}){
+function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
   const [busca,setBusca]=useState("");
   const [catF,setCatF]=useState(0);
   const [editId,setEditId]=useState(null);
@@ -1030,8 +1030,105 @@ function Estoque({produtos,setProdutos,categorias}){
   const prods=produtos.filter(p=>p.tipo==="mercado"&&(catF===0||p.categoriaId===catF)&&(busca===""||p.nome.toLowerCase().includes(busca.toLowerCase())));
   const ajustar=(id,delta)=>setProdutos(ps=>ps.map(p=>p.id===id?{...p,estoque:Math.max(0,(p.estoque||0)+delta)}:p));
   const setEstoque=(id,v)=>setProdutos(ps=>ps.map(p=>p.id===id?{...p,estoque:Math.max(0,+v)}:p));
+
+  // ── Receber Mercadoria (bipar código de barras) ──
+  const [codBip,setCodBip]=useState("");
+  const [prodBip,setProdBip]=useState(null);       // produto já existente encontrado pelo código
+  const [qtdReceber,setQtdReceber]=useState("");
+  const [novoRapido,setNovoRapido]=useState(null);  // {codbarra} — quando o código não existe ainda
+  const [formNovo,setFormNovo]=useState({nome:"",preco:"",categoriaId:cats[0]?.id||6,estoque:""});
+  const bipRef=useRef();
+
+  const bipar=(codRaw)=>{
+    const cod=codRaw.trim();
+    if(!cod)return;
+    const p=produtos.find(x=>x.codbarra===cod&&x.tipo==="mercado");
+    if(p){
+      setProdBip(p);setNovoRapido(null);setQtdReceber("");
+    } else {
+      setNovoRapido({codbarra:cod});setProdBip(null);
+      setFormNovo({nome:"",preco:"",categoriaId:cats[0]?.id||6,estoque:""});
+    }
+    setCodBip("");
+    setTimeout(()=>bipRef.current?.focus(),50);
+  };
+
+  const confirmarRecebimento=()=>{
+    const qtd=+qtdReceber;
+    if(!prodBip||!qtd||qtd<=0)return;
+    setProdutos(ps=>ps.map(p=>p.id===prodBip.id?{...p,estoque:(p.estoque||0)+qtd}:p));
+    setToast({msg:"📦 +"+qtd+" no estoque de "+prodBip.nome,tipo:"ok"});
+    setProdBip(null);setQtdReceber("");
+  };
+
+  const salvarNovoRapido=()=>{
+    if(!formNovo.nome||!formNovo.preco){setToast({msg:"⚠️ Nome e preço obrigatórios",tipo:"err"});return;}
+    const novo={
+      id:Date.now(), nome:formNovo.nome, preco:+formNovo.preco,
+      categoriaId:formNovo.categoriaId, tipo:"mercado", vendaPeso:false,
+      estoque:formNovo.estoque===""?0:+formNovo.estoque,
+      codbarra:novoRapido.codbarra, imagem:"",
+    };
+    setProdutos(ps=>[...ps,novo]);
+    setToast({msg:"✅ Produto novo cadastrado: "+novo.nome,tipo:"ok"});
+    setNovoRapido(null);
+  };
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+      {/* Receber Mercadoria — bipar código de barras */}
+      <div style={{...S.card,border:"2px solid #c8860a"}}>
+        <div style={S.sT("#f0c040")}>📷 Receber Mercadoria (bipar código de barras)</div>
+        <div style={{position:"relative",marginBottom:12}}>
+          <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:16}}>📷</span>
+          <input ref={bipRef} autoFocus style={{...S.inp,paddingLeft:34,background:"#150c00",border:"1px solid #c8860a",color:"#f0c040",fontSize:15,fontWeight:700,letterSpacing:2}}
+            placeholder="Bipe ou digite o código de barras..." value={codBip}
+            onChange={e=>setCodBip(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"&&codBip.trim())bipar(codBip);}} />
+        </div>
+
+        {prodBip&&(
+          <div style={{background:"#150c00",borderRadius:10,padding:14,border:"1px solid #4a8a00"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+              <span style={S.bdg("g")}>JÁ CADASTRADO</span>
+              <span style={{fontWeight:700,color:"#f5e6c8",fontSize:14}}>{categorias.find(c=>c.id===prodBip.categoriaId)?.emoji} {prodBip.nome}</span>
+            </div>
+            <div style={{fontSize:12,color:"#c8a060",marginBottom:10}}>Estoque atual: <strong style={{color:"#f0c040"}}>{prodBip.estoque??0}</strong> · Cód: {prodBip.codbarra}</div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <input autoFocus style={{...S.inp,width:120}} type="number" min="1" placeholder="Qtd recebida" value={qtdReceber} onChange={e=>setQtdReceber(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confirmarRecebimento()} />
+              <button style={S.btnOk} onClick={confirmarRecebimento}>✅ Adicionar ao estoque</button>
+              <button style={S.btnS} onClick={()=>setProdBip(null)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {novoRapido&&(
+          <div style={{background:"#150c00",borderRadius:10,padding:14,border:"1px solid #c8860a"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <span style={S.bdg("y")}>CÓDIGO NOVO</span>
+              <span style={{fontSize:12,color:"#c8a060"}}>{novoRapido.codbarra} — ainda não cadastrado, preencha pra criar:</span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <input autoFocus style={S.inp} placeholder="Nome do produto" value={formNovo.nome} onChange={e=>setFormNovo(f=>({...f,nome:e.target.value}))} />
+              <div style={S.grid3}>
+                <input style={S.inp} type="number" step="0.01" placeholder="Preço (R$)" value={formNovo.preco} onChange={e=>setFormNovo(f=>({...f,preco:e.target.value}))} />
+                <select style={S.inp} value={formNovo.categoriaId} onChange={e=>setFormNovo(f=>({...f,categoriaId:+e.target.value}))}>
+                  {cats.map(c=><option key={c.id} value={c.id}>{c.emoji} {c.nome}</option>)}
+                </select>
+                <input style={S.inp} type="number" min="0" placeholder="Qtd recebida" value={formNovo.estoque} onChange={e=>setFormNovo(f=>({...f,estoque:e.target.value}))} />
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button style={S.btnP} onClick={salvarNovoRapido}>➕ Cadastrar e adicionar ao estoque</button>
+                <button style={S.btnS} onClick={()=>setNovoRapido(null)}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!prodBip&&!novoRapido&&<div style={{fontSize:11,color:"#5a3a00"}}>Bipe um código: se o produto já existir, você só soma a quantidade recebida. Se for novo, abre um formulário rápido de cadastro já com o código preenchido.</div>}
+      </div>
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <input style={S.inp} placeholder="🔍 Buscar produto..." value={busca} onChange={e=>setBusca(e.target.value)} />
         <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
@@ -1077,12 +1174,13 @@ function Estoque({produtos,setProdutos,categorias}){
 }
 
 // ─── CADASTRO ─────────────────────────────────────────────────────────────────
-function Cadastro({produtos,setProdutos,categorias,setCategorias}){
+function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}}){
   const [tab,setTab]=useState("produtos");
   const [form,setForm]=useState({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:"",imagem:""});
   const [formCat,setFormCat]=useState({nome:"",emoji:"🛒",tipo:"mercado"});
   const [editId,setEditId]=useState(null);
   const [filtro,setFiltro]=useState("todos");
+  const importRef=useRef();
 
   const salvar=()=>{
     if(!form.nome||!form.preco)return;
@@ -1096,10 +1194,52 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias}){
   const salvarCat=()=>{if(!formCat.nome)return;setCategorias(c=>[...c,{...formCat,id:Date.now()}]);setFormCat({nome:"",emoji:"🛒",tipo:"mercado"});};
   const filtrados=produtos.filter(p=>filtro==="todos"||p.tipo===filtro);
 
+  // Backup completo (produtos + categorias, incluindo fotos em base64) pra baixar
+  // como .json — protege contra limpar cache, trocar de navegador, etc.
+  const exportarCatalogo=()=>{
+    try{
+      const data=JSON.stringify({produtos,categorias,exportadoEm:new Date().toISOString()},null,2);
+      const blob=new Blob([data],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url; a.download="catalogo-padaria-"+today().replace(/\//g,"-")+".json";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setToast({msg:"⬇️ Backup do catálogo baixado",tipo:"ok"});
+    }catch(err){ setToast({msg:"❌ Falha ao exportar: "+err.message,tipo:"err"}); }
+  };
+
+  const importarCatalogo=(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!Array.isArray(data.produtos)&&!Array.isArray(data.categorias)){
+          setToast({msg:"❌ Arquivo inválido — não parece um backup do catálogo",tipo:"err"}); return;
+        }
+        if(!window.confirm("Isso vai SUBSTITUIR todos os produtos e categorias atuais pelos do arquivo importado. Essa ação não pode ser desfeita. Continuar?")) return;
+        if(Array.isArray(data.produtos)) setProdutos(data.produtos);
+        if(Array.isArray(data.categorias)) setCategorias(data.categorias);
+        setToast({msg:"✅ Catálogo importado com sucesso",tipo:"ok"});
+      }catch(err){ setToast({msg:"❌ Arquivo inválido: "+err.message,tipo:"err"}); }
+    };
+    reader.readAsText(file);
+    e.target.value="";
+  };
+
   return(
     <div>
-      <div style={{display:"flex",gap:7,marginBottom:18}}>
+      <div style={{display:"flex",gap:7,marginBottom:18,alignItems:"center",flexWrap:"wrap"}}>
         {["produtos","categorias"].map(t=><button key={t} style={S.navBtn(tab===t)} onClick={()=>setTab(t)}>{t==="produtos"?"📦 Produtos":"🏷️ Categorias"}</button>)}
+        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+          <button style={S.btnS} onClick={exportarCatalogo} title="Baixa um arquivo .json com todos os produtos, categorias e fotos">⬇️ Exportar Catálogo (backup)</button>
+          <label style={{...S.btnS,cursor:"pointer",margin:0}} title="Restaura produtos e categorias a partir de um backup .json">
+            ⬆️ Importar Catálogo
+            <input ref={importRef} type="file" accept="application/json" style={{display:"none"}} onChange={importarCatalogo} />
+          </label>
+        </div>
       </div>
       {tab==="produtos"&&(
         <div style={S.grid2}>
@@ -2971,8 +3111,8 @@ export default function App(){
       <main style={S.main}>
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
         {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
-        {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} />}
-        {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} />}
+        {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} setToast={setToast} />}
+        {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} setToast={setToast} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
         {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} comandasFisicas={comandasFisicas} cancelarComanda={cancelarComanda} />}
         {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} cancelarComanda={cancelarComanda} />}
