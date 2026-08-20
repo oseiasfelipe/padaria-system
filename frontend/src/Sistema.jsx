@@ -652,17 +652,19 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
                     const semEstoque=p.estoque!==null&&p.estoque<=0;
                     const catDoProd=categorias.find(c=>c.id===p.categoriaId);
                     return(
-                      <div key={p.id} onClick={()=>!semEstoque&&addItem(p)} style={{padding:12,borderRadius:12,cursor:semEstoque?"not-allowed":"pointer",userSelect:"none",position:"relative",opacity:semEstoque?0.45:1,transition:"all 0.15s",background:qtdC>0?"#2a1800":"#150c00",border:qtdC>0?"2px solid #2a9a2a":"1px solid #2a2a4a"}}>
-                        {qtdC>0&&<div style={{position:"absolute",top:6,right:6,background:"#2a9a2a",color:"#fff",borderRadius:"50%",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900}}>{qtdC}</div>}
-                        {semEstoque&&<div style={{position:"absolute",top:6,left:6,...S.bdg("r")}}>SEM ESTOQUE</div>}
-                        {!semEstoque&&p.estoque!==null&&p.estoque<=8&&<div style={{position:"absolute",top:6,left:6,fontSize:9,color:"#ff8a4a",fontWeight:700}}>↓ POUCAS UNIDADES</div>}
+                      <div key={p.id} onClick={()=>!semEstoque&&addItem(p)} style={{borderRadius:14,overflow:"hidden",cursor:semEstoque?"not-allowed":"pointer",userSelect:"none",position:"relative",opacity:semEstoque?0.45:1,transition:"all 0.15s",background:qtdC>0?"#2a1800":"#150c00",border:qtdC>0?"2px solid #2a9a2a":"1px solid #2a2a4a"}}>
+                        {qtdC>0&&<div style={{position:"absolute",top:8,right:8,zIndex:2,background:"#2a9a2a",color:"#fff",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,boxShadow:"0 2px 6px rgba(0,0,0,0.4)"}}>{qtdC}</div>}
+                        {semEstoque&&<div style={{position:"absolute",top:8,left:8,zIndex:2,...S.bdg("r")}}>SEM ESTOQUE</div>}
+                        {!semEstoque&&p.estoque!==null&&p.estoque<=8&&<div style={{position:"absolute",top:8,left:8,zIndex:2,fontSize:9,color:"#fff",fontWeight:700,background:"rgba(154,60,0,0.85)",padding:"2px 7px",borderRadius:20}}>↓ POUCAS UNIDADES</div>}
                         {p.imagem
-                          ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:56,objectFit:"cover",borderRadius:8,marginBottom:5}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="block";}} />
+                          ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:118,objectFit:"cover",display:"block",background:"#fff"}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}} />
                           : null}
-                        <div style={{fontSize:22,marginBottom:5,display:p.imagem?"none":"block"}}>{catDoProd?.emoji||"📦"}</div>
-                        <div style={{fontSize:11,fontWeight:600,color:"#f0f0f0",marginBottom:3,lineHeight:1.3}}>{p.nome}</div>
-                        <div style={{fontSize:13,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}</div>
-                        {p.estoque!==null&&<div style={{fontSize:10,color:p.estoque<=5?"#ff6a6a":"#c8a060",marginTop:2}}>Estq: {p.estoque}</div>}
+                        <div style={{fontSize:40,height:118,display:p.imagem?"none":"flex",alignItems:"center",justifyContent:"center",background:"#1a0f00"}}>{catDoProd?.emoji||"📦"}</div>
+                        <div style={{padding:"10px 12px 12px"}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"#f0f0f0",marginBottom:4,lineHeight:1.3,minHeight:32}}>{p.nome}</div>
+                          <div style={{fontSize:15,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}</div>
+                          {p.estoque!==null&&<div style={{fontSize:10,color:p.estoque<=5?"#ff6a6a":"#c8a060",marginTop:2}}>Estq: {p.estoque}</div>}
+                        </div>
                       </div>
                     );
                   })}
@@ -974,20 +976,23 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
               const qtdU=itensAtivos.find(i=>!i.vendaPeso&&i.id===p.id)?.qtd||0;
               const tem=p.vendaPeso?qtdP>0:qtdU>0;
               return(
-                <div key={p.id} onClick={()=>(modo==="mesa"&&!comanda)?setToast({msg:"👆 Selecione uma mesa primeiro",tipo:"info"}):addPadaria(p)} style={{padding:12,borderRadius:12,cursor:"pointer",userSelect:"none",position:"relative",transition:"all 0.15s",background:tem?"#2a1400":"#150c00",border:tem?"2px solid #c8860a":"1px solid #3d2200"}}>
-                  {p.vendaPeso&&<div style={{position:"absolute",top:6,left:6,...S.bdg("p"),fontSize:9}}>⚖️</div>}
-                  {tem&&<div style={{position:"absolute",top:6,right:6,background:"#c8860a",color:"#1a0f00",borderRadius:7,padding:"1px 5px",fontSize:10,fontWeight:900}}>{p.vendaPeso?fmtKg(qtdP*1000):qtdU}</div>}
+                <div key={p.id} onClick={()=>(modo==="mesa"&&!comanda)?setToast({msg:"👆 Selecione uma mesa primeiro",tipo:"info"}):addPadaria(p)} style={{borderRadius:14,overflow:"hidden",cursor:"pointer",userSelect:"none",position:"relative",transition:"all 0.15s",background:tem?"#2a1400":"#150c00",border:tem?"2px solid #c8860a":"1px solid #3d2200"}}>
+                  {p.vendaPeso&&<div style={{position:"absolute",top:8,left:8,zIndex:2,...S.bdg("p"),fontSize:9}}>⚖️</div>}
+                  {tem&&<div style={{position:"absolute",top:8,right:8,zIndex:2,background:"#c8860a",color:"#1a0f00",borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:900,boxShadow:"0 2px 6px rgba(0,0,0,0.4)"}}>{p.vendaPeso?fmtKg(qtdP*1000):qtdU}</div>}
                   {p.imagem
-                    ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:60,objectFit:"cover",borderRadius:8,marginBottom:5,marginTop:p.vendaPeso?10:0}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="block";}} />
+                    ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:120,objectFit:"cover",display:"block",background:"#fff"}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}} />
                     : null}
-                  <div style={{fontSize:24,marginBottom:5,marginTop:p.vendaPeso?10:0,display:p.imagem?"none":"block"}}>{cat?.emoji||"🍞"}</div>
-                  <div style={{fontSize:11,fontWeight:600,color:"#f0f0f0",marginBottom:2,lineHeight:1.3}}>{p.nome}</div>
-                  <div style={{fontSize:12,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}{p.vendaPeso?" /kg":""}</div>
+                  <div style={{fontSize:42,height:120,display:p.imagem?"none":"flex",alignItems:"center",justifyContent:"center",background:"#1a0f00"}}>{cat?.emoji||"🍞"}</div>
+                  <div style={{padding:"10px 12px 12px"}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#f0f0f0",marginBottom:3,lineHeight:1.3,minHeight:32}}>{p.nome}</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#f0c040"}}>{fmt(p.preco)}{p.vendaPeso?" /kg":""}</div>
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
+
 
         {/* Carrinho balcão */}
         {modo==="balcao"&&(
@@ -2197,14 +2202,16 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
               const cat=categorias.find(c=>c.id===p.categoriaId);
               const qtd=carrinho.find(i=>i.id===p.id)?.qtd||0;
               return(
-                <div key={p.id} onClick={()=>addItem(p)} style={ST.produto(qtd>0)}>
-                  {qtd>0&&<div style={{position:"absolute",top:6,right:6,background:"#c8860a",color:"#1a0f00",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900}}>{qtd}</div>}
+                <div key={p.id} onClick={()=>addItem(p)} style={{borderRadius:14,overflow:"hidden",cursor:"pointer",userSelect:"none",position:"relative",background:qtd>0?"#2a1400":"#150c00",border:"2px solid "+(qtd>0?"#c8860a":"#3d2200")}}>
+                  {qtd>0&&<div style={{position:"absolute",top:8,right:8,zIndex:2,background:"#c8860a",color:"#1a0f00",borderRadius:"50%",width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,boxShadow:"0 2px 6px rgba(0,0,0,0.4)"}}>{qtd}</div>}
                   {p.imagem
-                    ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:64,objectFit:"cover",borderRadius:8,marginBottom:4}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="block";}} />
+                    ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:110,objectFit:"cover",display:"block",background:"#fff"}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}} />
                     : null}
-                  <div style={{fontSize:28,marginBottom:4,display:p.imagem?"none":"block"}}>{cat?.emoji||"🍞"}</div>
-                  <div style={{fontSize:12,fontWeight:700,color:"#f5e6c8",lineHeight:1.3}}>{p.nome}</div>
-                  <div style={{fontSize:13,fontWeight:800,color:"#f0c040",marginTop:3}}>{fmt(p.preco)}{p.vendaPeso?" /kg":""}</div>
+                  <div style={{fontSize:40,height:110,display:p.imagem?"none":"flex",alignItems:"center",justifyContent:"center",background:"#1a0f00"}}>{cat?.emoji||"🍞"}</div>
+                  <div style={{padding:"10px 12px 12px",textAlign:"center"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#f5e6c8",lineHeight:1.3,minHeight:32}}>{p.nome}</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#f0c040",marginTop:3}}>{fmt(p.preco)}{p.vendaPeso?" /kg":""}</div>
+                  </div>
                 </div>
               );
             })}
