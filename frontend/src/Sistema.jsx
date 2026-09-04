@@ -180,6 +180,19 @@ const lsSave = (key, value) => {
 function usePersistedState(key, fallback){
   const [state, setState] = useState(()=>lsLoad(key, fallback));
   useEffect(()=>{ lsSave(key, state); }, [state]);
+  // Sincroniza entre abas/janelas do MESMO navegador (ex: monitor do caixa e
+  // monitor do salão, ambos ligados no mesmo computador). O evento "storage"
+  // dispara nas outras janelas quando uma delas grava no localStorage.
+  useEffect(()=>{
+    const onStorage = (e) => {
+      if(e.key !== LS_PREFIX+key) return;
+      if(e.newValue===null) return;
+      try { setState(JSON.parse(e.newValue)); }
+      catch(err){ console.error("Falha ao sincronizar", key, err); }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  },[key]);
   return [state, setState];
 }
 
@@ -797,7 +810,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     if(modo==="balcao"){
       setCarrinho(b=>{
         const ex=b.find(i=>!i.vendaPeso&&i.id===prod.id);
-        if(ex)return b.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1}:i);
+        if(ex)return b.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo}:i);
         return[...b,{...prod,uid:uid(),qtd:1,statusPreparo:"pendente"}];
       });
       setToast({msg:"✅ "+prod.nome,tipo:"ok"});
@@ -806,7 +819,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
       setComandas(cs=>cs.map(c=>{
         if(c.id!==comanda.id)return c;
         const ex=c.itens.find(i=>!i.vendaPeso&&i.id===prod.id);
-        if(ex)return{...c,itens:c.itens.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1}:i)};
+        if(ex)return{...c,itens:c.itens.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo}:i)};
         return{...c,itens:[...c.itens,{...prod,uid:uid(),qtd:1,statusPreparo:"pendente"}]};
       }));
       setToast({msg:"✅ "+prod.nome+" → Mesa "+mesaSel,tipo:"ok"});
@@ -827,8 +840,9 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
   };
   const addQtdItem=(item,isMesa)=>{
     if(item.vendaPeso){setModalPeso({...item,id:item.prodId||item.id,preco:item.precoPor});return;}
-    if(isMesa)setComandas(cs=>cs.map(c=>{if(c.id!==comanda?.id)return c;return{...c,itens:c.itens.map(i=>i.uid===item.uid?{...i,qtd:i.qtd+1}:i)};}));
-    else setCarrinho(b=>b.map(i=>i.uid===item.uid?{...i,qtd:i.qtd+1}:i));
+    const bump=i=>({...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo});
+    if(isMesa)setComandas(cs=>cs.map(c=>{if(c.id!==comanda?.id)return c;return{...c,itens:c.itens.map(i=>i.uid===item.uid?bump(i):i)};}));
+    else setCarrinho(b=>b.map(i=>i.uid===item.uid?bump(i):i));
   };
 
   // Envia a mesa para a fila de pagamento do Caixa (os itens já vivem em `comandas`
@@ -2501,6 +2515,52 @@ function PainelPedidos({ comandas, setComandas, setToast }) {
   );
 }
 
+// ─── PAINEL DO SALÃO (monitor de expedição — somente leitura) ────────────────
+// Pensado para rodar num segundo monitor do mesmo computador (extensão de
+// tela), mostrando os pedidos prontos para o cliente/atendente de mesa verem
+// sem precisar de nenhum clique. Sincroniza sozinho via evento "storage".
+function PainelSalao({ comandas }) {
+  const prontos = [];
+  comandas.filter(c=>c.status==="aberta").forEach(c=>{
+    const itensProntos=(c.itens||[]).filter(i=>(i.statusPreparo||"pendente")==="pronto");
+    if(itensProntos.length>0){
+      prontos.push({
+        id:c.id,
+        titulo: c.mesa && c.mesa!=="Balcão" ? "Mesa "+c.mesa : (c.codigoComanda?"Comanda "+c.codigoComanda:"Balcão"),
+        nomeCliente:c.nomeCliente,
+        itens:itensProntos,
+      });
+    }
+  });
+
+  return (
+    <div style={{minHeight:"75vh",display:"flex",flexDirection:"column",alignItems:"center",gap:24,padding:"30px 0"}}>
+      <div style={{fontSize:32,fontWeight:900,color:"#f0c040",letterSpacing:2}}>🔔 PEDIDOS PRONTOS</div>
+      {prontos.length===0?(
+        <div style={{fontSize:22,color:"#5a3a00",marginTop:60}}>Nenhum pedido pronto no momento</div>
+      ):(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:22,width:"100%",maxWidth:1300,padding:"0 24px"}}>
+          {prontos.map(p=>(
+            <div key={p.id} style={{
+              background:"linear-gradient(145deg,#1a3a00,#0d2400)",
+              border:"3px solid #4a8a00",borderRadius:20,padding:"34px 22px",
+              textAlign:"center",animation:"pulseReady 1.6s ease-in-out infinite"
+            }}>
+              <div style={{fontSize:40,fontWeight:900,color:"#8aee3a",letterSpacing:2}}>{p.titulo}</div>
+              {p.nomeCliente&&<div style={{fontSize:17,color:"#c8e8a0",marginTop:8}}>{p.nomeCliente}</div>}
+              <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:5}}>
+                {p.itens.map(item=>(
+                  <div key={item.uid} style={{fontSize:15,color:"#f5e6c8"}}>{item.nome}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── GESTÃO DE USUÁRIOS ───────────────────────────────────────────────────────
 const PERFIS = {
   admin:     { label:"Administrador", cor:"#f0c040", desc:"Acesso total ao sistema" },
@@ -3100,7 +3160,11 @@ function Relatorio({comandas,vendas,produtos}){
 
 // ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
 export default function App(){
-  const [aba,setAba]=useState("pdv");
+  // Modo quiosque: abrindo a URL com ?painel=salao (ex: numa janela dedicada
+  // no segundo monitor), o app já entra direto no Painel do Salão e esconde
+  // o menu de operação — fica só a exibição, sem cliques possíveis.
+  const modoQuiosque = typeof window!=="undefined" && new URLSearchParams(window.location.search).get("painel")==="salao";
+  const [aba,setAba]=useState(modoQuiosque?"salao":"pdv");
   const [produtos,setProdutos]=usePersistedState("produtos", PRODUTOS_INICIAIS);
   const [categorias,setCategorias]=usePersistedState("categorias", CATEGORIAS_INICIAIS);
   const [comandas,setComandas]=usePersistedState("comandas", []);
@@ -3154,6 +3218,7 @@ export default function App(){
     {key:"pdv",    label:"🛒 PDV Mercado"},
     {key:"comanda",label:"🥖 Comanda"+(abertas>0?" ("+abertas+")":"")},
     {key:"pedidos",label:"🍳 Pedidos"+(pedidosPendentes>0?" ("+pedidosPendentes+")":"")},
+    {key:"salao",  label:"📺 Painel Salão"},
     {key:"estoque",label:"📦 Estoque"+(estBaixo>0?" ⚠️":"")},
     {key:"cadastro",label:"⚙️ Cadastro"},
     {key:"historico",label:"🧾 Histórico"},
@@ -3173,21 +3238,24 @@ export default function App(){
         ::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-track{background:#150c00;} ::-webkit-scrollbar-thumb{background:#5a3a00;border-radius:3px;}
         select option{background:#150c00;color:#f5e6c8;}
         @keyframes slideIn{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}
+        @keyframes pulseReady{0%,100%{box-shadow:0 0 0 0 rgba(138,238,58,0.35)}50%{box-shadow:0 0 0 14px rgba(138,238,58,0)}}
         button:hover{filter:brightness(1.12);}
       `}</style>
       <header style={S.header}>
         <div style={S.logo}>
           <span style={{background:"linear-gradient(135deg,#c8860a,#f0c040)",borderRadius:"50%",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 2px 8px rgba(200,134,10,0.5)"}}>🍞</span>
-          <span style={{display:"flex",alignItems:"center",gap:8,fontFamily:"Georgia,serif"}}><span style={{fontSize:19,fontWeight:900,color:"#f5e6c8",letterSpacing:2}}>PADARIA</span><span style={{fontSize:19,fontWeight:900,color:"#f0c040",letterSpacing:3,borderLeft:"2px solid #c8860a",borderRight:"2px solid #c8860a",padding:"0 10px",margin:"0 3px"}}>XV</span><span style={{fontSize:11,color:"#c8a060",fontWeight:400,marginLeft:4}}>PDV + Comanda Digital</span></span>
+          <span style={{display:"flex",alignItems:"center",gap:8,fontFamily:"Georgia,serif"}}><span style={{fontSize:19,fontWeight:900,color:"#f5e6c8",letterSpacing:2}}>PADARIA</span><span style={{fontSize:19,fontWeight:900,color:"#f0c040",letterSpacing:3,borderLeft:"2px solid #c8860a",borderRight:"2px solid #c8860a",padding:"0 10px",margin:"0 3px"}}>XV</span>{!modoQuiosque&&<span style={{fontSize:11,color:"#c8a060",fontWeight:400,marginLeft:4}}>PDV + Comanda Digital</span>}</span>
         </div>
-        <nav style={{display:"flex",gap:4}}>
-          {abas.map(n=>(
-            <button key={n.key} style={S.navBtn(aba===n.key,n.key==="pdv"?"g":"r")} onClick={()=>setAba(n.key)}>{n.label}</button>
-          ))}
-        </nav>
+        {!modoQuiosque&&(
+          <nav style={{display:"flex",gap:4}}>
+            {abas.map(n=>(
+              <button key={n.key} style={S.navBtn(aba===n.key,n.key==="pdv"?"g":"r")} onClick={()=>setAba(n.key)}>{n.label}</button>
+            ))}
+          </nav>
+        )}
         <div style={{display:"flex",alignItems:"center",gap:14}}>
-          {usuarioAtual&&<span style={{fontSize:11,color:"#c8a060"}}>👤 {usuarioAtual.nome}</span>}
-          {usuarioAtual?.perfil==="admin"&&(
+          {!modoQuiosque&&usuarioAtual&&<span style={{fontSize:11,color:"#c8a060"}}>👤 {usuarioAtual.nome}</span>}
+          {!modoQuiosque&&usuarioAtual?.perfil==="admin"&&(
             <button onClick={handleLogout} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #5a1a00",background:"#2a0a00",color:"#ff8a6a",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🚪 Sair</button>
           )}
           <div style={{fontSize:11,color:"#c8a060"}}>{today()}</div>
@@ -3197,6 +3265,7 @@ export default function App(){
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
         {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
         {aba==="pedidos"  &&<PainelPedidos comandas={comandas} setComandas={setComandas} setToast={setToast} />}
+        {aba==="salao"    &&<PainelSalao comandas={comandas} />}
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} setToast={setToast} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} setToast={setToast} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
