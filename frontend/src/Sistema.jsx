@@ -785,7 +785,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
   const totalBalcao=calcT(carrinho);
 
   const confirmarPeso=(prod,pesoKg,total)=>{
-    const item={uid:uid(),prodId:prod.id,id:prod.id,nome:prod.nome,vendaPeso:true,precoPor:prod.preco,pesoKg,total};
+    const item={uid:uid(),prodId:prod.id,id:prod.id,nome:prod.nome,vendaPeso:true,precoPor:prod.preco,pesoKg,total,statusPreparo:"pendente"};
     if(modo==="balcao")setCarrinho(c=>[...c,item]);
     else if(comanda)setComandas(cs=>cs.map(c=>c.id===comanda.id?{...c,itens:[...c.itens,item]}:c));
     setToast({msg:"⚖️ "+prod.nome+" "+fmtKg(pesoKg*1000)+" → "+fmt(total),tipo:"ok"});
@@ -798,7 +798,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
       setCarrinho(b=>{
         const ex=b.find(i=>!i.vendaPeso&&i.id===prod.id);
         if(ex)return b.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1}:i);
-        return[...b,{...prod,uid:uid(),qtd:1}];
+        return[...b,{...prod,uid:uid(),qtd:1,statusPreparo:"pendente"}];
       });
       setToast({msg:"✅ "+prod.nome,tipo:"ok"});
     } else {
@@ -807,7 +807,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
         if(c.id!==comanda.id)return c;
         const ex=c.itens.find(i=>!i.vendaPeso&&i.id===prod.id);
         if(ex)return{...c,itens:c.itens.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1}:i)};
-        return{...c,itens:[...c.itens,{...prod,uid:uid(),qtd:1}]};
+        return{...c,itens:[...c.itens,{...prod,uid:uid(),qtd:1,statusPreparo:"pendente"}]};
       }));
       setToast({msg:"✅ "+prod.nome+" → Mesa "+mesaSel,tipo:"ok"});
     }
@@ -2109,7 +2109,7 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
     setCarrinho(c => {
       const ex = c.find(i => i.id===prod.id);
       if (ex) return c.map(i => i.id===prod.id ? {...i,qtd:i.qtd+1} : i);
-      return [...c, {...prod, uid:uid(), qtd:1}];
+      return [...c, {...prod, uid:uid(), qtd:1, statusPreparo:"pendente"}];
     });
     setToast({msg:"✅ "+prod.nome,tipo:"ok"});
   };
@@ -2419,6 +2419,88 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
   return null;
 }
 
+// ─── PAINEL DE PEDIDOS (preparo/retirada) ────────────────────────────────────
+function PainelPedidos({ comandas, setComandas, setToast }) {
+  // Comandas abertas com pelo menos um item ainda não retirado
+  const comandasComItens = comandas.filter(c =>
+    c.status === "aberta" && (c.itens || []).some(i => (i.statusPreparo || "pendente") !== "entregue")
+  );
+
+  const marcarItem = (comandaId, itemUid, novoStatus) => {
+    setComandas(cs => cs.map(c => {
+      if (c.id !== comandaId) return c;
+      return { ...c, itens: c.itens.map(i => i.uid === itemUid ? { ...i, statusPreparo: novoStatus } : i) };
+    }));
+  };
+
+  const marcarTodosProntos = (comandaId) => {
+    setComandas(cs => cs.map(c => {
+      if (c.id !== comandaId) return c;
+      return { ...c, itens: c.itens.map(i => (i.statusPreparo || "pendente") === "pendente" ? { ...i, statusPreparo: "pronto" } : i) };
+    }));
+    setToast({ msg: "✅ Pedido marcado como pronto", tipo: "ok" });
+  };
+
+  const corBadge   = { pendente: "y", pronto: "g", entregue: "b" };
+  const labelBadge = { pendente: "⏳ Pendente", pronto: "🟢 Pronto — retirar", entregue: "📦 Retirado" };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={S.sT("#f0c040")}>🍳 Painel de Pedidos</div>
+
+      {comandasComItens.length === 0 ? (
+        <div style={{ ...S.card, textAlign: "center", padding: 40, color: "#5a3a00" }}>
+          Nenhum pedido em preparo no momento.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
+          {comandasComItens.map(c => {
+            const itensVisiveis = (c.itens || []).filter(i => (i.statusPreparo || "pendente") !== "entregue");
+            const temPendente = itensVisiveis.some(i => (i.statusPreparo || "pendente") === "pendente");
+            return (
+              <div key={c.id} style={{ ...S.card, border: "2px solid " + (temPendente ? "#c8860a" : "#4a8a00") }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontWeight: 800, color: "#f0c040", fontSize: 15 }}>
+                    {c.mesa && c.mesa !== "Balcão" ? "🍽️ Mesa " + c.mesa : "🛍️ Balcão"}
+                    {c.codigoComanda ? " · 🎫 " + c.codigoComanda : ""}
+                  </div>
+                  {c.nomeCliente && <span style={{ fontSize: 12, color: "#6ab8ff" }}>{c.nomeCliente}</span>}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+                  {itensVisiveis.map(item => {
+                    const st = item.statusPreparo || "pendente";
+                    return (
+                      <div key={item.uid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 8, background: "#150c00", border: "1px solid #3d2200" }}>
+                        <div>
+                          <div style={{ fontSize: 13, color: "#f5e6c8" }}>
+                            {item.nome}{item.vendaPeso ? " (" + fmtKg(item.pesoKg * 1000) + ")" : " x" + item.qtd}
+                          </div>
+                          <span style={S.bdg(corBadge[st])}>{labelBadge[st]}</span>
+                        </div>
+                        {st === "pendente" && (
+                          <button style={S.btnOk} onClick={() => marcarItem(c.id, item.uid, "pronto")}>✅ Pronto</button>
+                        )}
+                        {st === "pronto" && (
+                          <button style={S.btnGr} onClick={() => marcarItem(c.id, item.uid, "entregue")}>📦 Retirado</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {temPendente && (
+                  <button style={{ ...S.btnP, width: "100%" }} onClick={() => marcarTodosProntos(c.id)}>✅ Marcar tudo como pronto</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── GESTÃO DE USUÁRIOS ───────────────────────────────────────────────────────
 const PERFIS = {
   admin:     { label:"Administrador", cor:"#f0c040", desc:"Acesso total ao sistema" },
@@ -2586,6 +2668,7 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
             <tbody>
               {[
                 ["Lançar pedidos (balcão/mesa)","✅","✅","✅"],
+                ["Painel de Pedidos (preparo)","✅","❌","✅"],
                 ["Fechar conta / pagamento","✅","✅","❌"],
                 ["PDV Mercadoria","✅","✅","❌"],
                 ["Ver relatórios","✅","✅ (dia atual)","❌"],
@@ -3065,10 +3148,12 @@ export default function App(){
   const abertas=comandas.filter(c=>c.status==="aberta").length;
   const pendentesCaixa=comandas.filter(c=>c.status==="aberta"&&(c.itens||[]).length>0).length;
   const estBaixo=produtos.filter(p=>p.tipo==="mercado"&&p.estoque!==null&&p.estoque<=5).length;
+  const pedidosPendentes = comandas.reduce((s,c)=>s+(c.status==="aberta"?(c.itens||[]).filter(i=>(i.statusPreparo||"pendente")==="pendente").length:0),0);
 
   const abas=[
     {key:"pdv",    label:"🛒 PDV Mercado"},
     {key:"comanda",label:"🥖 Comanda"+(abertas>0?" ("+abertas+")":"")},
+    {key:"pedidos",label:"🍳 Pedidos"+(pedidosPendentes>0?" ("+pedidosPendentes+")":"")},
     {key:"estoque",label:"📦 Estoque"+(estBaixo>0?" ⚠️":"")},
     {key:"cadastro",label:"⚙️ Cadastro"},
     {key:"historico",label:"🧾 Histórico"},
@@ -3111,6 +3196,7 @@ export default function App(){
       <main style={S.main}>
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
         {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
+        {aba==="pedidos"  &&<PainelPedidos comandas={comandas} setComandas={setComandas} setToast={setToast} />}
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} setToast={setToast} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} setToast={setToast} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
