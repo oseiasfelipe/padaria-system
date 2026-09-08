@@ -2753,6 +2753,109 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
   );
 }
 
+// ─── CALCULADORA ──────────────────────────────────────────────────────────────
+function Calculadora(){
+  const [display,setDisplay]=useState("0");
+  const [anterior,setAnterior]=useState(null);
+  const [operador,setOperador]=useState(null);
+  const [aguardandoNovo,setAguardandoNovo]=useState(false);
+
+  const digitar=(d)=>{
+    if(aguardandoNovo){ setDisplay(d==="."?"0.":d); setAguardandoNovo(false); return; }
+    if(display.length>=12) return;
+    setDisplay(display==="0"&&d!=="."?d:display+d);
+  };
+  const ponto=()=>{ if(!display.includes(".")) digitar("."); };
+  const apagar=()=>setDisplay(d=>d.length>1?d.slice(0,-1):"0");
+  const limpar=()=>{ setDisplay("0"); setAnterior(null); setOperador(null); setAguardandoNovo(false); };
+
+  const calcular=(a,b,op)=>{
+    switch(op){
+      case "+": return a+b;
+      case "-": return a-b;
+      case "×": return a*b;
+      case "÷": return b===0?0:a/b;
+      default:  return b;
+    }
+  };
+
+  const escolherOperador=(op)=>{
+    const atual=parseFloat(display);
+    if(anterior!==null&&operador&&!aguardandoNovo){
+      const resultado=calcular(anterior,atual,operador);
+      setDisplay(String(resultado));
+      setAnterior(resultado);
+    } else {
+      setAnterior(atual);
+    }
+    setOperador(op);
+    setAguardandoNovo(true);
+  };
+
+  const igual=()=>{
+    if(anterior===null||!operador) return;
+    const atual=parseFloat(display);
+    const resultado=calcular(anterior,atual,operador);
+    setDisplay(String(resultado));
+    setAnterior(null); setOperador(null); setAguardandoNovo(true);
+  };
+
+  const btn=(tipo)=>({
+    padding:"14px 0", borderRadius:9, border:"none", cursor:"pointer",
+    fontFamily:"inherit", fontWeight:700, fontSize:16,
+    background: tipo==="op" ? "linear-gradient(135deg,#3a2000,#5a3400)" : tipo==="eq" ? "linear-gradient(135deg,#1a5a00,#2a8a00)" : "#150c00",
+    color: tipo==="op" ? "#f0c040" : tipo==="eq" ? "#b8ffb8" : "#f5e6c8",
+    border: tipo==="op" ? "1px solid #c8860a" : "1px solid #3d2200",
+  });
+
+  return(
+    <div style={S.card}>
+      <div style={S.sT()}>🧮 Calculadora</div>
+      <div style={{background:"#0d0d1a",border:"1px solid #3d2200",borderRadius:9,padding:"14px 16px",marginBottom:10,textAlign:"right",fontSize:28,fontWeight:800,color:"#f0c040",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        {display}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+        <button style={btn("op")} onClick={limpar}>C</button>
+        <button style={btn("op")} onClick={apagar}>⌫</button>
+        <button style={btn("op")} onClick={()=>escolherOperador("÷")}>÷</button>
+        <button style={btn("op")} onClick={()=>escolherOperador("×")}>×</button>
+
+        <button style={btn()} onClick={()=>digitar("7")}>7</button>
+        <button style={btn()} onClick={()=>digitar("8")}>8</button>
+        <button style={btn()} onClick={()=>digitar("9")}>9</button>
+        <button style={btn("op")} onClick={()=>escolherOperador("-")}>−</button>
+
+        <button style={btn()} onClick={()=>digitar("4")}>4</button>
+        <button style={btn()} onClick={()=>digitar("5")}>5</button>
+        <button style={btn()} onClick={()=>digitar("6")}>6</button>
+        <button style={btn("op")} onClick={()=>escolherOperador("+")}>+</button>
+
+        <button style={btn()} onClick={()=>digitar("1")}>1</button>
+        <button style={btn()} onClick={()=>digitar("2")}>2</button>
+        <button style={btn()} onClick={()=>digitar("3")}>3</button>
+        <button style={{...btn("eq"),gridRow:"span 2"}} onClick={igual}>=</button>
+
+        <button style={{...btn(),gridColumn:"span 2"}} onClick={()=>digitar("0")}>0</button>
+        <button style={btn()} onClick={ponto}>.</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL SUCESSO DE PAGAMENTO ───────────────────────────────────────────────
+function ModalSucessoPagamento({ total, onFechar }){
+  useEffect(()=>{ const t=setTimeout(onFechar,2500); return ()=>clearTimeout(t); },[]);
+  return(
+    <div style={S.overlay} onClick={onFechar}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#1a3a00,#0d2400)",border:"3px solid #4a8a00",borderRadius:20,padding:"40px 36px",width:340,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+        <div style={{fontSize:64,marginBottom:12}}>✅</div>
+        <div style={{fontSize:19,fontWeight:800,color:"#8aee3a",marginBottom:8}}>Pagamento realizado com sucesso!</div>
+        <div style={{fontSize:28,fontWeight:900,color:"#f0c040"}}>{fmt(total)}</div>
+      </div>
+    </div>
+  );
+}
+
 // ─── FECHAMENTO DE CAIXA ──────────────────────────────────────────────────────
 function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{},caixasFechados=[],setCaixasFechados=()=>{},cancelarComanda=()=>{}}){
   const hoje=today();
@@ -2764,6 +2867,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   const [sangria,setSangria]=useState("");
   const [suprimento,setSuprimento]=useState("");
   const [pedidoPag,setPedidoPag]=useState(null); // pedido em aberto selecionado para cobrar
+  const [pagamentoSucesso,setPagamentoSucesso]=useState(null); // {total} — dispara o popup de sucesso
 
   // ── Fila de pedidos aguardando pagamento (vindos do Atendente/Leitor/Comanda) ──
   // Total sempre calculado a partir dos itens ao vivo, nunca de um totalParcial
@@ -2789,6 +2893,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
       setComandasFisicas(cs=>cs.map(cf=>cf.codigo===pedidoPag.codigoComanda?{...cf,status:"paga",itens:[],totalParcial:0}:cf));
     }
     setToast({msg:"✅ Pagamento recebido — "+fmt(totalPedido),tipo:"ok"});
+    setPagamentoSucesso({total:totalPedido});
     setPedidoPag(null);
   };
 
@@ -2899,6 +3004,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {pedidoPag&&<ModalPagamento total={calcPedidoTotal(pedidoPag)} onConfirmar={finalizarPedidoPendente} onFechar={()=>setPedidoPag(null)} />}
+      {pagamentoSucesso&&<ModalSucessoPagamento total={pagamentoSucesso.total} onFechar={()=>setPagamentoSucesso(null)} />}
 
       {/* Fila de pedidos aguardando pagamento — vindos do Atendente/Leitor */}
       {pendentes.length>0&&(
@@ -2990,6 +3096,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
 
         {/* Movimentação + sangria/suprimento */}
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <Calculadora />
           <div style={S.card}>
             <div style={S.sT()}>💵 Controle de Caixa</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
