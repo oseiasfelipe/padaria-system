@@ -784,9 +784,12 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
   },[comandaRapida]);
   const [catF,setCatF]=useState(0);
   const [busca,setBusca]=useState("");
+  // Permite incluir produtos do PDV Mercado (bebidas, snacks etc.) dentro do
+  // cardápio da comanda — útil quando o cliente na mesa pede algo do mercado.
+  const [incluirMercado,setIncluirMercado]=useState(false);
 
-  const cats=categorias.filter(c=>c.tipo==="padaria");
-  const prods=produtos.filter(p=>p.tipo==="padaria"&&
+  const cats=categorias.filter(c=>c.tipo==="padaria"||(incluirMercado&&c.tipo==="mercado"));
+  const prods=produtos.filter(p=>(p.tipo==="padaria"||(incluirMercado&&p.tipo==="mercado"))&&
     (catF===0||p.categoriaId===catF)&&
     (busca===""||p.nome.toLowerCase().includes(busca.toLowerCase())));
 
@@ -807,10 +810,20 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
 
   const addPadaria=(prod)=>{
     if(prod.vendaPeso){setModalPeso(prod);return;}
+    if(prod.tipo==="mercado"&&prod.estoque!==null&&prod.estoque<=0){
+      setToast({msg:"⚠️ Estoque zerado: "+prod.nome,tipo:"err"});
+      return;
+    }
     if(modo==="balcao"){
       setCarrinho(b=>{
         const ex=b.find(i=>!i.vendaPeso&&i.id===prod.id);
-        if(ex)return b.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo}:i);
+        if(ex){
+          if(prod.tipo==="mercado"&&prod.estoque!==null&&ex.qtd>=prod.estoque){
+            setToast({msg:"⚠️ Estoque máximo atingido",tipo:"err"});
+            return b;
+          }
+          return b.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo}:i);
+        }
         return[...b,{...prod,uid:uid(),qtd:1,statusPreparo:"pendente"}];
       });
       setToast({msg:"✅ "+prod.nome,tipo:"ok"});
@@ -819,7 +832,13 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
       setComandas(cs=>cs.map(c=>{
         if(c.id!==comanda.id)return c;
         const ex=c.itens.find(i=>!i.vendaPeso&&i.id===prod.id);
-        if(ex)return{...c,itens:c.itens.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo}:i)};
+        if(ex){
+          if(prod.tipo==="mercado"&&prod.estoque!==null&&ex.qtd>=prod.estoque){
+            setToast({msg:"⚠️ Estoque máximo atingido",tipo:"err"});
+            return c;
+          }
+          return{...c,itens:c.itens.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo}:i)};
+        }
         return{...c,itens:[...c.itens,{...prod,uid:uid(),qtd:1,statusPreparo:"pendente"}]};
       }));
       setToast({msg:"✅ "+prod.nome+" → Mesa "+mesaSel,tipo:"ok"});
@@ -978,6 +997,12 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
             <input style={S.inp} placeholder="🔍 Buscar produto..." value={busca} onChange={e=>setBusca(e.target.value)} />
             {modo==="balcao"&&<input style={S.inp} placeholder="Nome do cliente..." value={nomeCliente} onChange={e=>setNomeCliente(e.target.value)} />}
           </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div onClick={()=>setIncluirMercado(v=>!v)} style={{width:42,height:22,borderRadius:11,background:incluirMercado?"#2a8a00":"#5a3a00",cursor:"pointer",position:"relative",flexShrink:0}}>
+              <div style={{position:"absolute",top:2,left:incluirMercado?22:2,width:18,height:18,borderRadius:"50%",background:"#f0f0f0",transition:"all 0.2s"}} />
+            </div>
+            <span style={{fontSize:12,color:incluirMercado?"#8aee3a":"#c8a060",fontWeight:600,cursor:"pointer"}} onClick={()=>setIncluirMercado(v=>!v)}>🛒 Incluir produtos do Mercado</span>
+          </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <span style={catF===0?S.tagA:S.tag} onClick={()=>setCatF(0)}>Todos</span>
             {cats.map(c=><span key={c.id} style={catF===c.id?S.tagA:S.tag} onClick={()=>setCatF(c.id)}>{c.emoji} {c.nome}</span>)}
@@ -989,9 +1014,12 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
               const qtdP=iAP.reduce((s,i)=>s+i.pesoKg,0);
               const qtdU=itensAtivos.find(i=>!i.vendaPeso&&i.id===p.id)?.qtd||0;
               const tem=p.vendaPeso?qtdP>0:qtdU>0;
+              const semEstoque=p.tipo==="mercado"&&p.estoque!==null&&p.estoque<=0;
               return(
-                <div key={p.id} onClick={()=>(modo==="mesa"&&!comanda)?setToast({msg:"👆 Selecione uma mesa primeiro",tipo:"info"}):addPadaria(p)} style={{borderRadius:14,overflow:"hidden",cursor:"pointer",userSelect:"none",position:"relative",transition:"all 0.15s",background:tem?"#2a1400":"#150c00",border:tem?"2px solid #c8860a":"1px solid #3d2200"}}>
+                <div key={p.id} onClick={()=>semEstoque?null:(modo==="mesa"&&!comanda)?setToast({msg:"👆 Selecione uma mesa primeiro",tipo:"info"}):addPadaria(p)} style={{borderRadius:14,overflow:"hidden",cursor:semEstoque?"not-allowed":"pointer",userSelect:"none",position:"relative",opacity:semEstoque?0.45:1,transition:"all 0.15s",background:tem?"#2a1400":"#150c00",border:tem?"2px solid #c8860a":"1px solid #3d2200"}}>
                   {p.vendaPeso&&<div style={{position:"absolute",top:8,left:8,zIndex:2,...S.bdg("p"),fontSize:9}}>⚖️</div>}
+                  {!p.vendaPeso&&p.tipo==="mercado"&&<div style={{position:"absolute",top:8,left:8,zIndex:2,...S.bdg("g"),fontSize:9}}>🛒</div>}
+                  {semEstoque&&<div style={{position:"absolute",top:8,left:8,zIndex:2,...S.bdg("r")}}>SEM ESTOQUE</div>}
                   {tem&&<div style={{position:"absolute",top:8,right:8,zIndex:2,background:"#c8860a",color:"#1a0f00",borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:900,boxShadow:"0 2px 6px rgba(0,0,0,0.4)"}}>{p.vendaPeso?fmtKg(qtdP*1000):qtdU}</div>}
                   {p.imagem
                     ? <img src={p.imagem} alt={p.nome} style={{width:"100%",height:120,objectFit:"cover",display:"block",background:"#fff"}} onError={e=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}} />
@@ -2882,8 +2910,52 @@ function ModalSucessoPagamento({ total, onFechar }){
   );
 }
 
+// ─── MODAL REVISAR PEDIDO (remover item antes de pagar) ──────────────────────
+function ModalRevisarPedido({ pedido, onRemoverItem, onProsseguir, onFechar }){
+  const itens = pedido.itens||[];
+  const total = itens.reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0);
+  return(
+    <div style={S.overlay} onClick={onFechar}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #c8860a",borderRadius:18,padding:26,width:400,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:17,fontWeight:800,color:"#f0c040"}}>
+            {pedido.mesa&&pedido.mesa!=="Balcão"?"🍽️ Mesa "+pedido.mesa:"🛍️ Balcão"}{pedido.codigoComanda?" · 🎫 "+pedido.codigoComanda:""}
+          </div>
+          <div style={{fontSize:12,color:"#c8a060"}}>{pedido.nomeCliente||"Consumidor"}</div>
+        </div>
+        <div style={{fontSize:11,color:"#5a3a00",textAlign:"center",marginBottom:12}}>Cliente desistiu de algum item? Remova aqui antes de cobrar.</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+          {itens.length===0
+            ? <div style={{color:"#5a3a00",textAlign:"center",padding:20,fontSize:13}}>Nenhum item restante</div>
+            : itens.map(item=>(
+              <div key={item.uid} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:"#150c00",border:"1px solid #3d2200"}}>
+                <div>
+                  <div style={{fontSize:13,color:"#f5e6c8"}}>{item.nome}</div>
+                  <div style={{fontSize:11,color:"#c8860a"}}>
+                    {item.vendaPeso ? fmtKg(item.pesoKg*1000)+" = "+fmt(item.total) : fmt(item.preco)+" × "+item.qtd+" = "+fmt(item.preco*item.qtd)}
+                  </div>
+                </div>
+                <button style={S.btnD} onClick={()=>onRemoverItem(item.uid)} title="Remover item — cliente desistiu">🗑️</button>
+              </div>
+            ))
+          }
+        </div>
+        <div style={{borderTop:"2px solid #c8860a",paddingTop:10,marginBottom:14,display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:900,color:"#f0c040"}}>
+          <span>Total</span><span>{fmt(total)}</span>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...S.btnS,flex:1}} onClick={onFechar}>Voltar</button>
+          <button disabled={itens.length===0} onClick={onProsseguir} style={{flex:2,padding:"11px 0",borderRadius:9,border:"none",cursor:itens.length===0?"not-allowed":"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,background:itens.length===0?"#2a1000":"linear-gradient(135deg,#1a5a00,#2a8a00)",color:itens.length===0?"#5a3a00":"#b8ffb8"}}>
+            💳 Ir para Pagamento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── FECHAMENTO DE CAIXA ──────────────────────────────────────────────────────
-function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{},caixasFechados=[],setCaixasFechados=()=>{},cancelarComanda=()=>{}}){
+function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comandasFisicas=[],setComandasFisicas=()=>{},caixasFechados=[],setCaixasFechados=()=>{},cancelarComanda=()=>{},produtos=[],setProdutos=()=>{}}){
   const hoje=today();
   const [periodoFiltro,setPeriodoFiltro]=useState("hoje");
   const [dataInicio,setDataInicio]=useState(hoje);
@@ -2893,6 +2965,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   const [sangria,setSangria]=useState("");
   const [suprimento,setSuprimento]=useState("");
   const [pedidoPag,setPedidoPag]=useState(null); // pedido em aberto selecionado para cobrar
+  const [pedidoRevisaoId,setPedidoRevisaoId]=useState(null); // id do pedido em revisão (antes de ir pro pagamento)
   const [pagamentoSucesso,setPagamentoSucesso]=useState(null); // {total} — dispara o popup de sucesso
 
   // ── Fila de pedidos aguardando pagamento (vindos do Atendente/Leitor/Comanda) ──
@@ -2902,11 +2975,29 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   const calcPedidoTotal = (p) => (p.itens||[]).reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0);
   const pendentes = comandas.filter(c=>c.status==="aberta"&&(c.itens||[]).length>0);
   const totalPendentes = pendentes.reduce((s,p)=>s+calcPedidoTotal(p),0);
+  const pedidoRevisao = pendentes.find(p=>p.id===pedidoRevisaoId) || null;
+
+  // Cliente desistiu de UM item específico no momento do pagamento — remove só
+  // aquela linha da comanda, sem cancelar o pedido inteiro.
+  const removerItemPedido = (comandaId, itemUid) => {
+    setComandas(cs=>cs.map(c=>c.id===comandaId?{...c,itens:(c.itens||[]).filter(i=>i.uid!==itemUid)}:c));
+  };
 
   const finalizarPedidoPendente = (pagamentos) => {
     if(!pedidoPag) return;
     const totalPedido = calcPedidoTotal(pedidoPag);
     setComandas(cs=>cs.map(c=>c.id===pedidoPag.id?{...c,status:"fechada",totalFinal:totalPedido,pagamentos}:c));
+    // Baixa estoque dos itens de mercado vendidos junto na comanda (itens de
+    // padaria costumam ter estoque=null e não são afetados).
+    const quantidades={};
+    (pedidoPag.itens||[]).forEach(i=>{
+      if(i.vendaPeso) return;
+      const pid=i.prodId||i.id;
+      quantidades[pid]=(quantidades[pid]||0)+(i.qtd||0);
+    });
+    if(Object.keys(quantidades).length>0){
+      setProdutos(ps=>ps.map(p=>(quantidades[p.id]&&p.estoque!==null)?{...p,estoque:Math.max(0,p.estoque-quantidades[p.id])}:p));
+    }
     imprimirCupom({
       id:Date.now(), mesa:pedidoPag.mesa||"Balcão", itens:pedidoPag.itens,
       status:"fechada", hora:now(), data:today(), totalFinal:totalPedido, pagamentos,
@@ -3030,6 +3121,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {pedidoPag&&<ModalPagamento total={calcPedidoTotal(pedidoPag)} onConfirmar={finalizarPedidoPendente} onFechar={()=>setPedidoPag(null)} />}
+      {pedidoRevisao&&<ModalRevisarPedido pedido={pedidoRevisao} onRemoverItem={(itemUid)=>removerItemPedido(pedidoRevisao.id,itemUid)} onProsseguir={()=>{setPedidoPag(pedidoRevisao);setPedidoRevisaoId(null);}} onFechar={()=>setPedidoRevisaoId(null)} />}
       {pagamentoSucesso&&<ModalSucessoPagamento total={pagamentoSucesso.total} onFechar={()=>setPagamentoSucesso(null)} />}
 
       {/* Fila de pedidos aguardando pagamento — vindos do Atendente/Leitor */}
@@ -3041,7 +3133,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:10}}>
             {pendentes.map(p=>(
-              <div key={p.id} onClick={()=>setPedidoPag(p)} style={{padding:"12px 14px",borderRadius:10,background:"#150c00",border:"1px solid #4a3000",cursor:"pointer"}}>
+              <div key={p.id} onClick={()=>setPedidoRevisaoId(p.id)} style={{padding:"12px 14px",borderRadius:10,background:"#150c00",border:"1px solid #4a3000",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                   <span style={{fontWeight:700,color:"#f0c040",fontSize:13}}>
                     {p.mesa&&p.mesa!=="Balcão"?"🍽️ Mesa "+p.mesa:"🛍️ Balcão"}{p.codigoComanda?" · 🎫 "+p.codigoComanda:""}
@@ -3050,7 +3142,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
                 </div>
                 <div style={{fontSize:11,color:"#c8a060"}}>{p.nomeCliente||"Consumidor"} · {(p.itens||[]).length} itens · {p.hora}</div>
                 <div style={{marginTop:8,display:"flex",gap:6}}>
-                  <button style={{...S.btnOk,flex:1}} onClick={(e)=>{e.stopPropagation();setPedidoPag(p);}}>💳 Cobrar</button>
+                  <button style={{...S.btnOk,flex:1}} onClick={(e)=>{e.stopPropagation();setPedidoRevisaoId(p.id);}}>💳 Cobrar</button>
                   <button style={{...S.btnD}} onClick={(e)=>{e.stopPropagation();cancelarPedidoPendente(p);}} title="Cancelar pedido">❌</button>
                 </div>
               </div>
@@ -3406,7 +3498,7 @@ export default function App(){
         {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} cancelarComanda={cancelarComanda} />}
         {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} cancelarComanda={cancelarComanda} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={usuarioAtual} setToast={setToast} />}
-        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} caixasFechados={caixasFechados} setCaixasFechados={setCaixasFechados} cancelarComanda={cancelarComanda} />}
+        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} caixasFechados={caixasFechados} setCaixasFechados={setCaixasFechados} cancelarComanda={cancelarComanda} produtos={produtos} setProdutos={setProdutos} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
       </main>
       {toast&&<Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)} />}
