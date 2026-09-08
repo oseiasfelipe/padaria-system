@@ -1243,11 +1243,37 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
     e.target.value="";
   };
 
+  // Adiciona ao catálogo os produtos/categorias padrão (PRODUTOS_INICIAIS /
+  // CATEGORIAS_INICIAIS, definidos lá no topo do arquivo) que ainda não
+  // existem aqui — sem duplicar o que você já cadastrou. Comparação por
+  // código de barras quando existe (itens de mercado); por nome quando não
+  // existe código (itens de padaria vendidos por peso/unidade).
+  const completarCatalogoPadrao=()=>{
+    const norm=s=>(s||"").trim().toLowerCase();
+    const catIdsExistentes=new Set(categorias.map(c=>c.id));
+    const novasCategorias=CATEGORIAS_INICIAIS.filter(c=>!catIdsExistentes.has(c.id));
+
+    const codsExistentes=new Set(produtos.filter(p=>p.codbarra).map(p=>p.codbarra));
+    const nomesExistentes=new Set(produtos.map(p=>norm(p.nome)));
+    const novosProdutos=PRODUTOS_INICIAIS
+      .filter(p=>p.codbarra?!codsExistentes.has(p.codbarra):!nomesExistentes.has(norm(p.nome)))
+      .map(p=>({...p,id:uid()}));
+
+    if(novasCategorias.length===0&&novosProdutos.length===0){
+      setToast({msg:"✅ Catálogo já está completo — nada para adicionar",tipo:"info"});
+      return;
+    }
+    if(novasCategorias.length>0) setCategorias(c=>[...c,...novasCategorias]);
+    if(novosProdutos.length>0) setProdutos(p=>[...p,...novosProdutos]);
+    setToast({msg:"✅ "+novosProdutos.length+" produtos adicionados ao catálogo",tipo:"ok"});
+  };
+
   return(
     <div>
       <div style={{display:"flex",gap:7,marginBottom:18,alignItems:"center",flexWrap:"wrap"}}>
         {["produtos","categorias"].map(t=><button key={t} style={S.navBtn(tab===t)} onClick={()=>setTab(t)}>{t==="produtos"?"📦 Produtos":"🏷️ Categorias"}</button>)}
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+          <button style={S.btnP} onClick={completarCatalogoPadrao} title="Adiciona os produtos padrão do sistema que ainda não existem no seu catálogo, sem duplicar os que você já tem">🧩 Completar com Catálogo Padrão</button>
           <button style={S.btnS} onClick={exportarCatalogo} title="Baixa um arquivo .json com todos os produtos, categorias e fotos">⬇️ Exportar Catálogo (backup)</button>
           <label style={{...S.btnS,cursor:"pointer",margin:0}} title="Restaura produtos e categorias a partir de um backup .json">
             ⬆️ Importar Catálogo
