@@ -265,7 +265,7 @@ function ModalPesagem({produto,onConfirmar,onFechar}){
   const confirmar=()=>{ if(!ok)return; onConfirmar(produto,pesoKg,total); };
   return(
     <div style={S.overlay} onClick={onFechar}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #c8860a",borderRadius:18,padding:28,width:360,boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #c8860a",borderRadius:18,padding:28,width:"min(360px,92vw)",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
         <div style={{textAlign:"center",marginBottom:20}}>
           <div style={{fontSize:36,marginBottom:6}}>⚖️</div>
           <div style={{fontSize:17,fontWeight:800,color:"#f0c040"}}>Lançar Pesagem</div>
@@ -383,7 +383,7 @@ const QRCodeImg = ({valor,tamanho=200}) => {
           <label style={S.lbl}>Chave Pix</label>
           <input style={S.inp} placeholder={pixConf.tipo==="telefone"?"+5511999998888":pixConf.tipo==="email"?"padaria@email.com":"Digite a chave"} value={pixConf.chave} onChange={e=>setPixConf(p=>({...p,chave:e.target.value}))} />
         </div>
-        <div style={S.grid2}>
+        <div className="pd-grid2">
           <div>
             <label style={S.lbl}>Nome (max 25 chars)</label>
             <input style={S.inp} placeholder="PADARIA XYZ" value={pixConf.nome} onChange={e=>setPixConf(p=>({...p,nome:e.target.value.substring(0,25)}))} />
@@ -446,7 +446,7 @@ function ModalPagamento({total,onConfirmar,onFechar}){
 
   return(
     <div style={S.overlay} onClick={onFechar}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #4a8a00",borderRadius:18,padding:28,width:mostraPix?480:420,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #4a8a00",borderRadius:18,padding:28,width:mostraPix?"min(480px,92vw)":"min(420px,92vw)",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
         <div style={{textAlign:"center",marginBottom:20}}>
           <div style={{fontSize:36,marginBottom:6}}>{mostraPix?"📱":"💳"}</div>
           <div style={{fontSize:17,fontWeight:800,color:"#8aee3a"}}>{mostraPix?"Pagamento via Pix":"Pagamento"}</div>
@@ -520,6 +520,7 @@ function ModalPagamento({total,onConfirmar,onFechar}){
 
 // ─── PDV MERCADORIA ───────────────────────────────────────────────────────────
 function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
+  const tela=useResponsivo();
   const [carrinho,setCarrinho]=useState([]);
   const [busca,setBusca]=useState("");
   const [codBarra,setCodBarra]=useState("");
@@ -599,13 +600,13 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
   };
 
   return(
-    <div style={{display:"grid",gridTemplateColumns:"1fr 360px",gap:16,height:"calc(100vh-160px)"}}>
+    <div style={{display:"grid",gridTemplateColumns:tela.tablet?"1fr":"1fr 360px",gap:16,height:tela.mobile?"auto":"calc(100vh-160px)"}}>
       {modalPag&&<ModalPagamento total={total} onConfirmar={finalizarVenda} onFechar={()=>setModalPag(false)} />}
 
       {/* Cardápio mercadoria */}
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         {/* Barra dupla: cód barras + busca global */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:tela.mobile?"1fr":"1fr 1fr",gap:10}}>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:16}}>📷</span>
             <input ref={cbRef} style={{...S.inp,paddingLeft:34,background:"#150c00",border:"1px solid #c8860a",color:"#f0c040",fontSize:15,fontWeight:700,letterSpacing:2}}
@@ -623,7 +624,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
         {!buscando&&!catSel&&(
           <div style={{...S.card,flex:1,overflowY:"auto"}}>
             <div style={S.sT()}>🛒 Categorias</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:tela.mobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:12}}>
               {cats.map(c=>{
                 const qtdCat=todosMercado.filter(p=>p.categoriaId===c.id).length;
                 return(
@@ -659,7 +660,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
               <div style={{color:"#5a3a00",textAlign:"center",padding:40,fontSize:13}}>Nenhum produto encontrado.</div>
             ):(
               <>
-                <div style={{...S.grid4,overflowY:"auto",alignContent:"start",flex:1}}>
+                <div style={{display:"grid",gridTemplateColumns:tela.mobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,overflowY:"auto",alignContent:"start",flex:1}}>
                   {prods.map(p=>{
                     const qtdC=carrinho.find(i=>i.id===p.id)?.qtd||0;
                     const semEstoque=p.estoque!==null&&p.estoque<=0;
@@ -742,6 +743,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
 
 // ─── COMANDA DIGITAL (PADARIA) ────────────────────────────────────────────────
 function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{},setAba=()=>{},cancelarComanda=()=>{}}){
+  const tela=useResponsivo();
   const [modo,setModo]=useState("balcao");
   const [mesaSel,setMesaSel]=useState(null);
   const [carrinho,setCarrinho]=useState([]);
@@ -946,14 +948,14 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
         ))}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:modo==="mesa"?"240px 1fr 300px":"1fr 320px",gap:14,minHeight:"calc(100vh - 220px)"}}>
+      <div style={{display:"grid",gridTemplateColumns:tela.tablet?"1fr":(modo==="mesa"?"240px 1fr 300px":"1fr 320px"),gap:14,minHeight:tela.mobile?"auto":"calc(100vh - 220px)"}}>
 
         {/* Seletor mesas */}
         {modo==="mesa"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={S.card}>
               <div style={S.sT()}>🍽️ Mesas</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
+              <div style={{display:"grid",gridTemplateColumns:tela.mobile?"repeat(4,1fr)":"repeat(3,1fr)",gap:7}}>
                 {Array.from({length:MESAS_TOTAL},(_,i)=>i+1).map(n=>{
                   const ab=!!getMesa(n);const at=mesaSel===n;
                   return(<button key={n} onClick={()=>abrirMesa(n)} style={{padding:"11px 0",borderRadius:10,fontFamily:"inherit",fontWeight:800,fontSize:14,cursor:"pointer",transition:"all 0.15s",border:at?"2px solid #f0c040":ab?"2px solid #c8860a":"1px solid #3d2200",background:at?"#3a2000":ab?"#2a1500":"#150c00",color:at?"#f0c040":ab?"#f0a020":"#c8a060"}}>
@@ -993,7 +995,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
 
         {/* Cardápio padaria */}
         <div style={{...S.card,display:"flex",flexDirection:"column",gap:10,overflowY:"auto"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:tela.mobile?"1fr":"1fr 1fr",gap:8}}>
             <input style={S.inp} placeholder="🔍 Buscar produto..." value={busca} onChange={e=>setBusca(e.target.value)} />
             {modo==="balcao"&&<input style={S.inp} placeholder="Nome do cliente..." value={nomeCliente} onChange={e=>setNomeCliente(e.target.value)} />}
           </div>
@@ -1007,7 +1009,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
             <span style={catF===0?S.tagA:S.tag} onClick={()=>setCatF(0)}>Todos</span>
             {cats.map(c=><span key={c.id} style={catF===c.id?S.tagA:S.tag} onClick={()=>setCatF(c.id)}>{c.emoji} {c.nome}</span>)}
           </div>
-          <div style={S.grid4}>
+          <div style={{display:"grid",gridTemplateColumns:tela.mobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
             {prods.map(p=>{
               const cat=categorias.find(c=>c.id===p.categoriaId);
               const iAP=itensAtivos.filter(i=>i.vendaPeso&&(i.prodId||i.id)===p.id);
@@ -1153,7 +1155,7 @@ function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <input autoFocus style={S.inp} placeholder="Nome do produto" value={formNovo.nome} onChange={e=>setFormNovo(f=>({...f,nome:e.target.value}))} />
-              <div style={S.grid3}>
+              <div className="pd-grid3">
                 <input style={S.inp} type="number" step="0.01" placeholder="Preço (R$)" value={formNovo.preco} onChange={e=>setFormNovo(f=>({...f,preco:e.target.value}))} />
                 <select style={S.inp} value={formNovo.categoriaId} onChange={e=>setFormNovo(f=>({...f,categoriaId:+e.target.value}))}>
                   {cats.map(c=><option key={c.id} value={c.id}>{c.emoji} {c.nome}</option>)}
@@ -1310,7 +1312,7 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
         </div>
       </div>
       {tab==="produtos"&&(
-        <div style={S.grid2}>
+        <div className="pd-grid2">
           <div style={S.card}>
             <div style={S.sT()}>{editId?"✏️ Editar":"➕ Novo"} Produto</div>
             <div style={{display:"flex",flexDirection:"column",gap:11}}>
@@ -1346,7 +1348,7 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
                 </details>
                 <div style={{fontSize:10,color:"#5a3a00",marginTop:3}}>Deixe em branco pra usar o emoji da categoria</div>
               </div>
-              <div style={S.grid2}>
+              <div className="pd-grid2">
                 <div><label style={S.lbl}>{form.vendaPeso?"Preço por kg":"Preço unit."} (R$)</label><input style={S.inp} type="number" step="0.01" value={form.preco} onChange={e=>setForm({...form,preco:e.target.value})} /></div>
                 <div><label style={S.lbl}>Tipo</label>
                   <select style={S.inp} value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value,categoriaId:e.target.value==="padaria"?1:6})}>
@@ -1359,7 +1361,7 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
                   {categorias.filter(c=>c.tipo===form.tipo).map(c=><option key={c.id} value={c.id}>{c.emoji} {c.nome}</option>)}
                 </select></div>
               {form.tipo==="mercado"&&(
-                <div style={S.grid2}>
+                <div className="pd-grid2">
                   <div><label style={S.lbl}>Estoque inicial</label><input style={S.inp} type="number" min="0" value={form.estoque} onChange={e=>setForm({...form,estoque:e.target.value})} placeholder="0" /></div>
                   <div><label style={S.lbl}>Cód. de barras (EAN)</label><input style={S.inp} value={form.codbarra} onChange={e=>setForm({...form,codbarra:e.target.value})} placeholder="7891234567890" /></div>
                 </div>
@@ -1410,12 +1412,12 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
         </div>
       )}
       {tab==="categorias"&&(
-        <div style={S.grid2}>
+        <div className="pd-grid2">
           <div style={S.card}>
             <div style={S.sT()}>🏷️ Nova Categoria</div>
             <div style={{display:"flex",flexDirection:"column",gap:11}}>
               <div><label style={S.lbl}>Nome</label><input style={S.inp} value={formCat.nome} onChange={e=>setFormCat({...formCat,nome:e.target.value})} placeholder="Ex: Bebidas" /></div>
-              <div style={S.grid2}>
+              <div className="pd-grid2">
                 <div><label style={S.lbl}>Emoji</label><input style={S.inp} value={formCat.emoji} onChange={e=>setFormCat({...formCat,emoji:e.target.value})} /></div>
                 <div><label style={S.lbl}>Tipo</label>
                   <select style={S.inp} value={formCat.tipo} onChange={e=>setFormCat({...formCat,tipo:e.target.value})}>
@@ -1689,7 +1691,7 @@ function CameraScanner({ onScan, onFechar }) {
     <div style={S.overlay} onClick={onFechar}>
       <div onClick={e => e.stopPropagation()} style={{
         background:"#0d0800", border:"2px solid #c8860a", borderRadius:20,
-        padding:20, width:340, boxShadow:"0 20px 60px rgba(0,0,0,0.9)",
+        padding:20, width:"min(340px,92vw)", boxShadow:"0 20px 60px rgba(0,0,0,0.9)",
         display:"flex", flexDirection:"column", alignItems:"center", gap:14
       }}>
         <div style={{fontSize:16,fontWeight:700,color:"#f0c040"}}>📷 Escanear QR Code da Comanda</div>
@@ -1940,7 +1942,7 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+      <div className="pd-grid4">
         {[
           { l: "Total de Comandas", v: comandasFisicas.length, i: "🎫", c: "#c8a060" },
           { l: "Disponíveis",       v: livres,  i: "🟢", c: "#8aee3a" },
@@ -2008,7 +2010,7 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
       {/* Modal detalhe da comanda */}
       {comandaSel && (
         <div style={S.overlay} onClick={() => setComandaSel(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(145deg,#2a1800,#150c00)", border: "2px solid #c8860a", borderRadius: 20, padding: 28, width: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.9)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(145deg,#2a1800,#150c00)", border: "2px solid #c8860a", borderRadius: 20, padding: 28, width: "min(400px,92vw)", boxShadow: "0 20px 60px rgba(0,0,0,0.9)" }}>
             <div style={{ textAlign: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 48, fontWeight: 900, color: corStatus[comandaSel.status], letterSpacing: 3 }}>{comandaSel.codigo}</div>
               <div style={{ fontSize: 13, color: corStatus[comandaSel.status], fontWeight: 700 }}>{labelStatus[comandaSel.status]}</div>
@@ -2117,7 +2119,7 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
       {/* Modal gerar comandas */}
       {modalGerar && (
         <div style={S.overlay} onClick={() => setModalGerar(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(145deg,#2a1800,#150c00)", border: "2px solid #c8860a", borderRadius: 20, padding: 28, width: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.9)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(145deg,#2a1800,#150c00)", border: "2px solid #c8860a", borderRadius: 20, padding: 28, width: "min(360px,92vw)", boxShadow: "0 20px 60px rgba(0,0,0,0.9)" }}>
             <div style={{ ...S.sT(), justifyContent: "center" }}>🎫 Gerar Lote de Comandas</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
@@ -2339,7 +2341,7 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
       {/* Grade de mesas */}
       <div style={ST.card}>
         <div style={{...S.lbl,fontSize:13,marginBottom:10}}>🍽️ SELECIONAR MESA</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+        <div className="pd-grid4">
           {Array.from({length:12},(_,i)=>i+1).map(n=>{
             const aberta=comandas.find(c=>c.mesa===n&&c.status==="aberta");
             const cor=aberta?"#f0a020":"#c8a060";
@@ -2405,7 +2407,7 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
             <span style={catFiltro===0?S.tagA:S.tag} onClick={()=>setCatFiltro(0)}>Todos</span>
             {categorias.map(c=><span key={c.id} style={catFiltro===c.id?S.tagA:S.tag} onClick={()=>setCatFiltro(c.id)}>{c.emoji} {c.nome}</span>)}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          <div className="pd-grid3-prod">
             {prods.map(p=>{
               const cat=categorias.find(c=>c.id===p.categoriaId);
               const qtd=carrinho.find(i=>i.id===p.id)?.qtd||0;
@@ -2692,7 +2694,7 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {/* Resumo por perfil */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+      <div className="pd-grid3">
         {Object.entries(PERFIS).map(([key,p]) => (
           <div key={key} style={{...S.card,textAlign:"center",borderColor:p.cor+"44"}}>
             <div style={{fontSize:22,fontWeight:900,color:p.cor}}>{usuarios.filter(u=>u.perfil===key&&u.ativo).length}</div>
@@ -2702,7 +2704,7 @@ function GestaoUsuarios({ usuarioAtual, setToast }) {
         ))}
       </div>
 
-      <div style={S.grid2}>
+      <div className="pd-grid2">
         {/* Formulário */}
         <div style={S.card}>
           <div style={S.sT()}>{editId?"✏️ Editar":"👤 Novo"} Usuário</div>
@@ -2901,7 +2903,7 @@ function ModalSucessoPagamento({ total, onFechar }){
   useEffect(()=>{ const t=setTimeout(onFechar,2500); return ()=>clearTimeout(t); },[]);
   return(
     <div style={S.overlay} onClick={onFechar}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#1a3a00,#0d2400)",border:"3px solid #4a8a00",borderRadius:20,padding:"40px 36px",width:340,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#1a3a00,#0d2400)",border:"3px solid #4a8a00",borderRadius:20,padding:"40px 36px",width:"min(340px,92vw)",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
         <div style={{fontSize:64,marginBottom:12}}>✅</div>
         <div style={{fontSize:19,fontWeight:800,color:"#8aee3a",marginBottom:8}}>Pagamento realizado com sucesso!</div>
         <div style={{fontSize:28,fontWeight:900,color:"#f0c040"}}>{fmt(total)}</div>
@@ -2916,7 +2918,7 @@ function ModalRevisarPedido({ pedido, onRemoverItem, onProsseguir, onFechar }){
   const total = itens.reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0);
   return(
     <div style={S.overlay} onClick={onFechar}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #c8860a",borderRadius:18,padding:26,width:400,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #c8860a",borderRadius:18,padding:26,width:"min(400px,92vw)",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
         <div style={{textAlign:"center",marginBottom:16}}>
           <div style={{fontSize:17,fontWeight:800,color:"#f0c040"}}>
             {pedido.mesa&&pedido.mesa!=="Balcão"?"🍽️ Mesa "+pedido.mesa:"🛍️ Balcão"}{pedido.codigoComanda?" · 🎫 "+pedido.codigoComanda:""}
@@ -3171,7 +3173,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
       </div>
 
       {/* KPIs principais */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      <div className="pd-grid4">
         {[
           {l:"Total de Vendas",v:fmt(totalGeral),i:"💰",c:"#f0c040"},
           {l:"Qtd. Transações",v:todasVendas.length,i:"🧾",c:"#f0a840"},
@@ -3186,7 +3188,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
         ))}
       </div>
 
-      <div style={S.grid2}>
+      <div className="pd-grid2">
         {/* Formas de pagamento */}
         <div style={S.card}>
           <div style={S.sT()}>💳 Vendas por Forma de Pagamento</div>
@@ -3286,7 +3288,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
       {/* Modal fechar caixa */}
       {mostrarFechar&&(
         <div style={S.overlay} onClick={()=>setMostrarFechar(false)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #c8860a",borderRadius:20,padding:32,width:420,boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(145deg,#2a1800,#150c00)",border:"2px solid #c8860a",borderRadius:20,padding:32,width:"min(420px,92vw)",boxShadow:"0 20px 60px rgba(0,0,0,0.9)"}}>
             <div style={{textAlign:"center",marginBottom:20}}>
               <div style={{fontSize:36,marginBottom:8}}>🔒</div>
               <div style={{fontSize:18,fontWeight:800,color:"#f0c040"}}>Fechar Caixa</div>
@@ -3341,12 +3343,12 @@ function Relatorio({comandas,vendas,produtos}){
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      <div className="pd-grid4">
         {[{l:"Total Hoje",v:fmt(totalDia),i:"💰",c:"#f0c040"},{l:"PDV Mercado",v:fmt(totalPDV),i:"🛒",c:"#8aee3a"},{l:"Comanda Digital",v:fmt(totalCMD),i:"🥖",c:"#f0a840"},{l:"Total Acumulado",v:fmt(totalGeral),i:"🏆",c:"#c8860a"}].map(k=>(
           <div key={k.l} style={{...S.card,textAlign:"center"}}><div style={{fontSize:26,marginBottom:5}}>{k.i}</div><div style={{fontSize:20,fontWeight:900,color:k.c}}>{k.v}</div><div style={{fontSize:11,color:"#c8a060",marginTop:3}}>{k.l}</div></div>
         ))}
       </div>
-      <div style={S.grid2}>
+      <div className="pd-grid2">
         <div style={S.card}>
           <div style={S.sT()}>🏅 Mais Vendidos Hoje</div>
           {rankArr.length===0?<div style={{color:"#5a3a00",textAlign:"center",padding:20}}>Sem vendas hoje</div>:rankArr.map(([nome,qtd],idx)=>(
@@ -3385,6 +3387,7 @@ function Relatorio({comandas,vendas,produtos}){
 
 // ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
 export default function App(){
+  const tela = useResponsivo();
   // Modo quiosque: abrindo a URL com ?painel=salao (ex: numa janela dedicada
   // no segundo monitor), o app já entra direto no Painel do Salão e esconde
   // o menu de operação — fica só a exibição, sem cliques possíveis.
@@ -3460,33 +3463,58 @@ export default function App(){
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&display=swap');
         * { box-sizing:border-box; margin:0; padding:0; }
+        html, body { overflow-x:hidden; max-width:100vw; }
+        img { max-width:100%; }
         ::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-track{background:#150c00;} ::-webkit-scrollbar-thumb{background:#5a3a00;border-radius:3px;}
         select option{background:#150c00;color:#f5e6c8;}
         @keyframes slideIn{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}
         @keyframes pulseReady{0%,100%{box-shadow:0 0 0 0 rgba(138,238,58,0.35)}50%{box-shadow:0 0 0 14px rgba(138,238,58,0)}}
         button:hover{filter:brightness(1.12);}
+        .pd-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+        .pd-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+        .pd-grid3-prod{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+        .pd-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+        @media (max-width:900px){
+          .pd-grid2{grid-template-columns:1fr;}
+          .pd-grid4{grid-template-columns:repeat(2,1fr);}
+        }
+        @media (max-width:640px){
+          .pd-grid3{grid-template-columns:1fr;}
+          .pd-grid3-prod{grid-template-columns:repeat(2,1fr);}
+        }
       `}</style>
-      <header style={S.header}>
-        <div style={S.logo}>
-          <span style={{background:"linear-gradient(135deg,#c8860a,#f0c040)",borderRadius:"50%",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 2px 8px rgba(200,134,10,0.5)"}}>🍞</span>
-          <span style={{display:"flex",alignItems:"center",gap:8,fontFamily:"Georgia,serif"}}><span style={{fontSize:19,fontWeight:900,color:"#f5e6c8",letterSpacing:2}}>PADARIA</span><span style={{fontSize:19,fontWeight:900,color:"#f0c040",letterSpacing:3,borderLeft:"2px solid #c8860a",borderRight:"2px solid #c8860a",padding:"0 10px",margin:"0 3px"}}>XV</span>{!modoQuiosque&&<span style={{fontSize:11,color:"#c8a060",fontWeight:400,marginLeft:4}}>PDV + Comanda Digital</span>}</span>
+      <header style={{...S.header, ...(tela.mobile?{flexDirection:"column",height:"auto",padding:"10px 10px 0",alignItems:"stretch",gap:8}:{})}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:tela.mobile?"100%":"auto"}}>
+          <div style={S.logo}>
+            <span style={{background:"linear-gradient(135deg,#c8860a,#f0c040)",borderRadius:"50%",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 2px 8px rgba(200,134,10,0.5)"}}>🍞</span>
+            <span style={{display:"flex",alignItems:"center",gap:8,fontFamily:"Georgia,serif"}}><span style={{fontSize:19,fontWeight:900,color:"#f5e6c8",letterSpacing:2}}>PADARIA</span><span style={{fontSize:19,fontWeight:900,color:"#f0c040",letterSpacing:3,borderLeft:"2px solid #c8860a",borderRight:"2px solid #c8860a",padding:"0 10px",margin:"0 3px"}}>XV</span>{!modoQuiosque&&!tela.mobile&&<span style={{fontSize:11,color:"#c8a060",fontWeight:400,marginLeft:4}}>PDV + Comanda Digital</span>}</span>
+          </div>
+          {tela.mobile&&(
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {!modoQuiosque&&usuarioAtual?.perfil==="admin"&&(
+                <button onClick={handleLogout} style={{padding:"6px 10px",borderRadius:8,border:"1px solid #5a1a00",background:"#2a0a00",color:"#ff8a6a",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🚪</button>
+              )}
+            </div>
+          )}
         </div>
         {!modoQuiosque&&(
-          <nav style={{display:"flex",gap:4}}>
+          <nav style={{display:"flex",gap:4,overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:tela.mobile?8:0,width:tela.mobile?"100%":"auto",flexShrink:0}}>
             {abas.map(n=>(
-              <button key={n.key} style={S.navBtn(aba===n.key,n.key==="pdv"?"g":"r")} onClick={()=>setAba(n.key)}>{n.label}</button>
+              <button key={n.key} style={{...S.navBtn(aba===n.key,n.key==="pdv"?"g":"r"),whiteSpace:"nowrap",flexShrink:0}} onClick={()=>setAba(n.key)}>{n.label}</button>
             ))}
           </nav>
         )}
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          {!modoQuiosque&&usuarioAtual&&<span style={{fontSize:11,color:"#c8a060"}}>👤 {usuarioAtual.nome}</span>}
-          {!modoQuiosque&&usuarioAtual?.perfil==="admin"&&(
-            <button onClick={handleLogout} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #5a1a00",background:"#2a0a00",color:"#ff8a6a",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🚪 Sair</button>
-          )}
-          <div style={{fontSize:11,color:"#c8a060"}}>{today()}</div>
-        </div>
+        {!tela.mobile&&(
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            {!modoQuiosque&&usuarioAtual&&<span style={{fontSize:11,color:"#c8a060"}}>👤 {usuarioAtual.nome}</span>}
+            {!modoQuiosque&&usuarioAtual?.perfil==="admin"&&(
+              <button onClick={handleLogout} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #5a1a00",background:"#2a0a00",color:"#ff8a6a",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🚪 Sair</button>
+            )}
+            <div style={{fontSize:11,color:"#c8a060"}}>{today()}</div>
+          </div>
+        )}
       </header>
-      <main style={S.main}>
+      <main style={{...S.main, ...(tela.mobile?{padding:10}:{})}}>
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
         {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
         {aba==="pedidos"  &&<PainelPedidos comandas={comandas} setComandas={setComandas} setToast={setToast} />}
