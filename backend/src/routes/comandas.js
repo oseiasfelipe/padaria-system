@@ -6,9 +6,7 @@ const auth   = require('../middlewares/auth');
 router.get('/', auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT c.*, m.numero as mesa_numero
-       FROM comandas c LEFT JOIN mesas m ON m.id=c.mesa_id
-       WHERE c.status='aberta' ORDER BY c.aberta_em DESC`
+      `SELECT * FROM comandas WHERE status='aberta' ORDER BY aberta_em DESC`
     );
     for (const c of rows) {
       const { rows: itens } = await pool.query('SELECT * FROM itens_comanda WHERE comanda_id=$1', [c.id]);
@@ -22,13 +20,11 @@ router.get('/', auth, async (req, res) => {
 router.get('/historico', auth, async (req, res) => {
   try {
     const { data } = req.query;
-    let q = `SELECT c.*, m.numero as mesa_numero FROM comandas c
-             LEFT JOIN mesas m ON m.id=c.mesa_id WHERE c.status='fechada'`;
+    let q = `SELECT * FROM comandas WHERE status='fechada'`;
     const vals = [];
-    if (data) { vals.push(data); q += ` AND c.aberta_em::date=$${vals.length}`; }
-    q += ' ORDER BY c.fechada_em DESC LIMIT 200';
+    if (data) { vals.push(data); q += ` AND aberta_em::date=$${vals.length}`; }
+    q += ' ORDER BY fechada_em DESC LIMIT 200';
     const { rows } = await pool.query(q, vals);
-    // buscar itens e pagamentos para cada comanda
     for (const c of rows) {
       const { rows: itens } = await pool.query('SELECT * FROM itens_comanda WHERE comanda_id=$1', [c.id]);
       const { rows: pags  } = await pool.query('SELECT * FROM pagamentos WHERE comanda_id=$1', [c.id]);
@@ -39,14 +35,14 @@ router.get('/historico', auth, async (req, res) => {
 });
 
 // POST /comandas — abre nova comanda
-// body: { tipo, mesaId, nomeCliente, codigoComanda }
+// body: { tipo, mesaNumero, nomeCliente, codigoComanda }
 router.post('/', auth, async (req, res) => {
-  const { tipo, mesaId, nomeCliente, codigoComanda } = req.body;
+  const { tipo, mesaNumero, nomeCliente, codigoComanda } = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO comandas (tipo,mesa_id,nome_cliente,atendente_id,codigo_comanda)
+      `INSERT INTO comandas (tipo,mesa_numero,nome_cliente,atendente_id,codigo_comanda)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [tipo, mesaId || null, nomeCliente || null, req.usuario.id, codigoComanda || null]
+      [tipo, mesaNumero ?? null, nomeCliente || null, req.usuario.id, codigoComanda || null]
     );
     res.status(201).json({ ...rows[0], itens: [] });
   } catch (err) { res.status(500).json({ erro: err.message }); }
@@ -71,7 +67,6 @@ router.post('/:id/itens', auth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente') RETURNING *`,
       [req.params.id, produto_id, nome_produto, preco_unit, qtd || 1, peso_kg || null, total_item]
     );
-    // baixa estoque se mercado (item com produto_id e sem peso)
     if (produto_id && !peso_kg) {
       await pool.query(
         'UPDATE produtos SET estoque=GREATEST(0,estoque-$1) WHERE id=$2 AND estoque IS NOT NULL',
@@ -82,11 +77,7 @@ router.post('/:id/itens', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ erro: err.message }); }
 });
 
-// PATCH /comandas/:id/itens/:itemId — ajusta quantidade e/ou reabre o status
-// de preparo quando mais unidades são pedidas (mesma regra que já tínhamos
-// no frontend: se o item já estava pronto/entregue e ganha mais qtd, volta
-// pra pendente, pra cozinha ver que precisa preparar de novo).
-// body: { qtd } ou { statusPreparo }
+// PATCH /comandas/:id/itens/:itemId — ajusta quantidade e/ou status de preparo
 router.patch('/:id/itens/:itemId', auth, async (req, res) => {
   const { qtd, statusPreparo } = req.body;
   try {
@@ -132,8 +123,6 @@ router.post('/:id/fechar', auth, async (req, res) => {
         [req.params.id, p.forma, p.valor, p.troco||0]
       );
     }
-    // Marca a comanda física como "paga" (mesmo comportamento que já existia
-    // no frontend) — não libera direto, fica esperando confirmação manual.
     const codigoComanda = rows[0]?.codigo_comanda;
     if (codigoComanda) {
       await client.query(
