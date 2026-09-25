@@ -925,7 +925,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,re
           await comandasAPI.ajustarItem(comanda.id, ex.uid, { qtd: ex.qtd+1 });
         } else {
           await comandasAPI.adicionarItem(comanda.id, {
-            produto_id:prod.id, nome_produto:prod.nome, preco_unit:prod.preco, qtd:1,
+            produto_id:prod.id, nome_produto:prod.nome, preco_unit:prod.preco, qtd:1, total_item:prod.preco,
           });
         }
         await recarregarComandas();
@@ -2596,7 +2596,7 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, recarregarComa
                       for(const item of carrinho){
                         await comandasAPI.adicionarItem(nova.id, {
                           produto_id: item.id, nome_produto: item.nome,
-                          preco_unit: item.preco, qtd: item.qtd,
+                          preco_unit: item.preco, qtd: item.qtd, total_item: item.preco*item.qtd,
                         });
                       }
                       await recarregarComandas();
