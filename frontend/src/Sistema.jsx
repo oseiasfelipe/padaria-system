@@ -3650,34 +3650,59 @@ export default function App(){
   // você já cadastrou), sem precisar de nenhum passo manual.
   const [produtos,setProdutos]=useState([]);
   const [categorias,setCategorias]=useState([]);
+  // Busca produtos e categorias SEPARADAMENTE — antes usava Promise.all, que
+  // descartava as duas listas se UMA falhasse (foi o que gerou a duplicação
+  // de categorias: cada vez que /produtos falhava, o app achava que também
+  // não tinha categoria nenhuma, e recriava tudo de novo).
+  const carregarProdutosECategorias = async () => {
+    let prodRows=[], catRows=[];
+    try { prodRows = await produtosAPI.listar(); } catch(err){ console.error("Falha ao carregar produtos:", err); }
+    try { catRows  = await categoriasAPI.listar(); } catch(err){ console.error("Falha ao carregar categorias:", err); }
+    return { prodRows: Array.isArray(prodRows)?prodRows:[], catRows: Array.isArray(catRows)?catRows:[] };
+  };
   const recarregarCatalogo = async () => {
-    try {
-      const [prodRows,catRows] = await Promise.all([produtosAPI.listar(), categoriasAPI.listar()]);
-      setProdutos(Array.isArray(prodRows)?prodRows.map(mapProduto):[]);
-      setCategorias(Array.isArray(catRows)?catRows.map(mapCategoria):[]);
-    } catch(err){ console.error("Falha ao carregar catálogo:", err); }
+    const { prodRows, catRows } = await carregarProdutosECategorias();
+    setProdutos(prodRows.map(mapProduto));
+    setCategorias(catRows.map(mapCategoria));
   };
   useEffect(()=>{
     (async ()=>{
-      try {
-        const [prodRows,catRows] = await Promise.all([produtosAPI.listar(), categoriasAPI.listar()]);
-        if(prodRows.length===0 && catRows.length===0){
-          // Servidor vazio — migra o catálogo que já está no navegador deste
-          // dispositivo (os 16 produtos reais, se for esse o caso) pro banco.
+      const { prodRows, catRows } = await carregarProdutosECategorias();
+      // Só migra se não existir NENHUM produto com "tipo" definido — cobre o
+      // caso de já existir um catálogo legado/incompleto (sem tipo) que não
+      // deve travar a migração do catálogo real do navegador.
+      if(!prodRows.some(p=>p.tipo)){
+        try {
+          const norm=s=>(s||"").trim().toLowerCase();
           const catLocais = lsLoad("categorias", CATEGORIAS_INICIAIS);
           const prodLocais = lsLoad("produtos", PRODUTOS_INICIAIS);
-          const mapaIds = {}; // id local antigo → id novo do servidor
+          const mapaIds = {}; // id local antigo → id real no servidor
+          let erros = [];
           for(const c of catLocais){
-            const nova = await categoriasAPI.criar(outboundCategoria(c));
-            mapaIds["cat_"+c.id] = nova.id;
+            const existente = catRows.find(x=>norm(x.nome)===norm(c.nome)&&x.tipo===c.tipo);
+            if(existente){ mapaIds["cat_"+c.id]=existente.id; continue; }
+            try {
+              const nova = await categoriasAPI.criar(outboundCategoria(c));
+              mapaIds["cat_"+c.id] = nova.id;
+            } catch(e){ erros.push("categoria '"+c.nome+"': "+e.message); }
           }
           for(const p of prodLocais){
-            await produtosAPI.criar(outboundProduto({...p, categoriaId: mapaIds["cat_"+p.categoriaId]}));
+            try {
+              await produtosAPI.criar(outboundProduto({...p, categoriaId: mapaIds["cat_"+p.categoriaId]}));
+            } catch(e){ erros.push("produto '"+p.nome+"': "+e.message); }
           }
-          setToast({msg:"☁️ Catálogo migrado para o servidor",tipo:"ok"});
+          if(erros.length>0){
+            console.error("Erros na migração do catálogo:", erros);
+            setToast({msg:"⚠️ Catálogo migrado com "+erros.length+" erro(s) — veja o console (F12)",tipo:"err"});
+          } else {
+            setToast({msg:"☁️ Catálogo migrado para o servidor",tipo:"ok"});
+          }
+        } catch(err){
+          console.error("Falha ao migrar catálogo:", err);
+          setToast({msg:"❌ Falha ao migrar catálogo: "+err.message,tipo:"err"});
         }
-        await recarregarCatalogo();
-      } catch(err){ console.error("Falha ao migrar/carregar catálogo:", err); }
+      }
+      await recarregarCatalogo(); // roda sempre, mesmo se a migração acima deu erro parcial
     })();
     const t=setInterval(recarregarCatalogo, 15000);
     return ()=>clearInterval(t);
