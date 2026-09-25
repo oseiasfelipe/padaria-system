@@ -155,6 +155,60 @@ const apiFetch = (path, opts={}) => {
   });
 };
 
+// ─── API DE COMANDAS (backend real, Postgres) ────────────────────────────────
+// Substitui o antigo localStorage: comandas/itens agora vivem no banco, o que
+// permite sincronizar caixa, cozinha (Painel de Pedidos) e salão entre
+// dispositivos diferentes. `recarregarComandas` (definido no App) reconsulta
+// o servidor depois de qualquer mutação e também roda num intervalo, então
+// cada tela vê as mudanças feitas em outro aparelho em poucos segundos.
+const comandasAPI = {
+  listar:        ()                => apiFetch('/comandas').then(r=>r.json()),
+  criar:         (body)            => apiFetch('/comandas',{method:'POST',body:JSON.stringify(body)}).then(r=>r.json()),
+  adicionarItem: (id,body)         => apiFetch(`/comandas/${id}/itens`,{method:'POST',body:JSON.stringify(body)}).then(r=>r.json()),
+  ajustarItem:   (id,itemId,body)  => apiFetch(`/comandas/${id}/itens/${itemId}`,{method:'PATCH',body:JSON.stringify(body)}).then(r=>r.json()),
+  removerItem:   (id,itemId)       => apiFetch(`/comandas/${id}/itens/${itemId}`,{method:'DELETE'}).then(r=>r.json()),
+  fechar:        (id,body)         => apiFetch(`/comandas/${id}/fechar`,{method:'POST',body:JSON.stringify(body)}).then(r=>r.json()),
+  cancelar:      (id)              => apiFetch(`/comandas/${id}`,{method:'DELETE'}).then(r=>r.json()),
+};
+
+// Um código de comanda física só existe de verdade se veio de um ticket
+// impresso (ex: "042"). Os códigos sintéticos que o Atendente usa pra
+// balcão/mesa sem ticket ("BAL-...", "MESA-...") não existem na tabela
+// comandas_fisicas — mandar um desses pro backend quebraria a referência.
+const isCodigoFisico = (cod) => !!cod && !String(cod).startsWith("BAL-") && !String(cod).startsWith("MESA-");
+
+// Converte uma comanda vinda do backend (snake_case, Postgres) pro mesmo
+// formato que o front-end já usava com o localStorage — assim as telas que
+// já existiam (Historico, FechamentoCaixa, PainelPedidos...) não precisam
+// mudar como leem os campos, só de onde os dados vêm.
+const mapComanda = (row) => {
+  const dt = row.aberta_em ? new Date(row.aberta_em) : new Date();
+  return {
+    id: row.id,
+    mesa: row.tipo==="mesa" ? row.mesa_id : "Balcão",
+    nomeCliente: row.nome_cliente || "",
+    codigoComanda: row.codigo_comanda || undefined,
+    status: row.status,
+    tipo: row.tipo,
+    totalFinal: row.total_final!=null ? parseFloat(row.total_final) : undefined,
+    hora: dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+    data: dt.toLocaleDateString("pt-BR"),
+    itens: (row.itens||[]).map(it=>({
+      uid: it.id,
+      id: it.produto_id,
+      prodId: it.produto_id,
+      nome: it.nome_produto,
+      preco: it.preco_unit!=null ? parseFloat(it.preco_unit) : 0,
+      precoPor: it.preco_unit!=null ? parseFloat(it.preco_unit) : 0,
+      qtd: it.qtd!=null ? parseFloat(it.qtd) : 1,
+      vendaPeso: it.peso_kg!=null,
+      pesoKg: it.peso_kg!=null ? parseFloat(it.peso_kg) : undefined,
+      total: it.total_item!=null ? parseFloat(it.total_item) : 0,
+      statusPreparo: it.status_preparo || "pendente",
+    })),
+  };
+};
+
 // ─── PERSISTÊNCIA LOCAL (localStorage) ───────────────────────────────────────
 // Guarda estado no navegador para sobreviver a um F5 / fechar aba.
 // Não sincroniza entre dispositivos — isso exigiria salvar via backend/API.
@@ -742,7 +796,7 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
 }
 
 // ─── COMANDA DIGITAL (PADARIA) ────────────────────────────────────────────────
-function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{},setAba=()=>{},cancelarComanda=()=>{}}){
+function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,recarregarComandas=async()=>{},setToast,setComandasFisicas=()=>{},comandaRapida,setComandaRapida=()=>{},setAba=()=>{},cancelarComanda=()=>{}}){
   const tela=useResponsivo();
   const [modo,setModo]=useState("balcao");
   const [mesaSel,setMesaSel]=useState(null);
@@ -757,32 +811,36 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
   // Receber comanda rápida da aba Comandas
   useEffect(()=>{
     if(!comandaRapida) return;
-    if(comandaRapida.mesa){
-      // Vai para aba mesas e seleciona a mesa
-      setModo("mesa");
-      const n=parseInt(comandaRapida.mesa);
-      if(n){
-        // Abre a mesa se não estiver aberta
-        const existe=comandas.find(c=>c.mesa===n&&c.status==="aberta");
-        if(!existe){
-          setComandas(cs=>[...cs,{
-            id:uid(),mesa:n,itens:[],status:"aberta",
-            hora:now(),data:today(),tipo:"mesa",
-            nomeCliente:comandaRapida.nomeCliente||"",
-            codigoComanda:comandaRapida.codigo,
-          }]);
+    (async ()=>{
+      if(comandaRapida.mesa){
+        // Vai para aba mesas e seleciona a mesa
+        setModo("mesa");
+        const n=parseInt(comandaRapida.mesa);
+        if(n){
+          // Abre a mesa no backend se não estiver aberta ainda
+          const existe=comandas.find(c=>c.mesa===n&&c.status==="aberta");
+          if(!existe){
+            try {
+              await comandasAPI.criar({
+                tipo:"mesa", mesaId:n,
+                nomeCliente:comandaRapida.nomeCliente||undefined,
+                codigoComanda:isCodigoFisico(comandaRapida.codigo)?comandaRapida.codigo:undefined,
+              });
+              await recarregarComandas();
+            } catch(err){ setToast({msg:"❌ Falha ao abrir mesa: "+err.message,tipo:"err"}); }
+          }
+          setMesaSel(n);
+          if(comandaRapida.nomeCliente) setNomeCliente(comandaRapida.nomeCliente);
         }
-        setMesaSel(n);
-        if(comandaRapida.nomeCliente) setNomeCliente(comandaRapida.nomeCliente);
+      } else {
+        // Balcão com comanda física vinculada
+        setModo("balcao");
+        setNomeCliente(comandaRapida.nomeCliente||"");
+        setCodigoBalcaoAtual(comandaRapida.codigo||null);
       }
-    } else {
-      // Balcão com comanda física vinculada
-      setModo("balcao");
-      setNomeCliente(comandaRapida.nomeCliente||"");
-      setCodigoBalcaoAtual(comandaRapida.codigo||null);
-    }
-    setToast({msg:"🎫 Comanda "+comandaRapida.codigo+" — pronta para lançar pedidos",tipo:"ok"});
-    setComandaRapida(null);
+      setToast({msg:"🎫 Comanda "+comandaRapida.codigo+" — pronta para lançar pedidos",tipo:"ok"});
+      setComandaRapida(null);
+    })();
   },[comandaRapida]);
   const [catF,setCatF]=useState(0);
   const [busca,setBusca]=useState("");
@@ -796,21 +854,38 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     (busca===""||p.nome.toLowerCase().includes(busca.toLowerCase())));
 
   const getMesa=n=>comandas.find(c=>c.mesa===n&&c.status==="aberta");
-  const abrirMesa=n=>{if(!getMesa(n))setComandas(cs=>[...cs,{id:uid(),mesa:n,itens:[],status:"aberta",hora:now(),data:today(),tipo:"mesa"}]);setMesaSel(n);};
+  const abrirMesa=async(n)=>{
+    if(!getMesa(n)){
+      try {
+        await comandasAPI.criar({ tipo:"mesa", mesaId:n });
+        await recarregarComandas();
+      } catch(err){ setToast({msg:"❌ Falha ao abrir mesa: "+err.message,tipo:"err"}); return; }
+    }
+    setMesaSel(n);
+  };
   const comanda=mesaSel?getMesa(mesaSel):null;
   const calcT=itens=>itens.reduce((s,i)=>s+(i.vendaPeso?i.total:i.preco*i.qtd),0);
   const totalMesa=comanda?calcT(comanda.itens):0;
   const totalBalcao=calcT(carrinho);
 
-  const confirmarPeso=(prod,pesoKg,total)=>{
-    const item={uid:uid(),prodId:prod.id,id:prod.id,nome:prod.nome,vendaPeso:true,precoPor:prod.preco,pesoKg,total,statusPreparo:"pendente"};
-    if(modo==="balcao")setCarrinho(c=>[...c,item]);
-    else if(comanda)setComandas(cs=>cs.map(c=>c.id===comanda.id?{...c,itens:[...c.itens,item]}:c));
+  const confirmarPeso=async(prod,pesoKg,total)=>{
+    if(modo==="balcao"){
+      const item={uid:uid(),prodId:prod.id,id:prod.id,nome:prod.nome,vendaPeso:true,precoPor:prod.preco,pesoKg,total,statusPreparo:"pendente"};
+      setCarrinho(c=>[...c,item]);
+    } else if(comanda){
+      try {
+        await comandasAPI.adicionarItem(comanda.id, {
+          produto_id:prod.id, nome_produto:prod.nome, preco_unit:prod.preco,
+          peso_kg:pesoKg, total_item:total,
+        });
+        await recarregarComandas();
+      } catch(err){ setToast({msg:"❌ Falha ao lançar item: "+err.message,tipo:"err"}); }
+    }
     setToast({msg:"⚖️ "+prod.nome+" "+fmtKg(pesoKg*1000)+" → "+fmt(total),tipo:"ok"});
     setModalPeso(null);
   };
 
-  const addPadaria=(prod)=>{
+  const addPadaria=async(prod)=>{
     if(prod.vendaPeso){setModalPeso(prod);return;}
     if(prod.tipo==="mercado"&&prod.estoque!==null&&prod.estoque<=0){
       setToast({msg:"⚠️ Estoque zerado: "+prod.nome,tipo:"err"});
@@ -831,43 +906,60 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
       setToast({msg:"✅ "+prod.nome,tipo:"ok"});
     } else {
       if(!comanda)return;
-      setComandas(cs=>cs.map(c=>{
-        if(c.id!==comanda.id)return c;
-        const ex=c.itens.find(i=>!i.vendaPeso&&i.id===prod.id);
+      const ex=comanda.itens.find(i=>!i.vendaPeso&&i.id===prod.id);
+      try {
         if(ex){
           if(prod.tipo==="mercado"&&prod.estoque!==null&&ex.qtd>=prod.estoque){
             setToast({msg:"⚠️ Estoque máximo atingido",tipo:"err"});
-            return c;
+            return;
           }
-          return{...c,itens:c.itens.map(i=>(!i.vendaPeso&&i.id===prod.id)?{...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo}:i)};
+          await comandasAPI.ajustarItem(comanda.id, ex.uid, { qtd: ex.qtd+1 });
+        } else {
+          await comandasAPI.adicionarItem(comanda.id, {
+            produto_id:prod.id, nome_produto:prod.nome, preco_unit:prod.preco, qtd:1,
+          });
         }
-        return{...c,itens:[...c.itens,{...prod,uid:uid(),qtd:1,statusPreparo:"pendente"}]};
-      }));
-      setToast({msg:"✅ "+prod.nome+" → Mesa "+mesaSel,tipo:"ok"});
+        await recarregarComandas();
+        setToast({msg:"✅ "+prod.nome+" → Mesa "+mesaSel,tipo:"ok"});
+      } catch(err){ setToast({msg:"❌ Falha ao lançar item: "+err.message,tipo:"err"}); }
     }
   };
 
-  const removeItem=(iUid,isPeso,isMesa)=>{
+  const removeItem=async(iUid,isPeso,isMesa)=>{
     if(isMesa){
-      setComandas(cs=>cs.map(c=>{
-        if(c.id!==comanda?.id)return c;
-        if(isPeso)return{...c,itens:c.itens.filter(i=>i.uid!==iUid)};
-        return{...c,itens:c.itens.map(i=>i.uid===iUid?{...i,qtd:Math.max(0,i.qtd-1)}:i).filter(i=>i.vendaPeso||i.qtd>0)};
-      }));
+      if(!comanda)return;
+      try {
+        if(isPeso){
+          await comandasAPI.removerItem(comanda.id, iUid);
+        } else {
+          const item=comanda.itens.find(i=>i.uid===iUid);
+          if(!item)return;
+          if(item.qtd-1<=0) await comandasAPI.removerItem(comanda.id, iUid);
+          else await comandasAPI.ajustarItem(comanda.id, iUid, { qtd: item.qtd-1 });
+        }
+        await recarregarComandas();
+      } catch(err){ setToast({msg:"❌ Falha ao remover item: "+err.message,tipo:"err"}); }
     } else {
       if(isPeso)setCarrinho(b=>b.filter(i=>i.uid!==iUid));
       else setCarrinho(b=>b.map(i=>i.uid===iUid?{...i,qtd:Math.max(0,i.qtd-1)}:i).filter(i=>i.vendaPeso||i.qtd>0));
     }
   };
-  const addQtdItem=(item,isMesa)=>{
+  const addQtdItem=async(item,isMesa)=>{
     if(item.vendaPeso){setModalPeso({...item,id:item.prodId||item.id,preco:item.precoPor});return;}
-    const bump=i=>({...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo});
-    if(isMesa)setComandas(cs=>cs.map(c=>{if(c.id!==comanda?.id)return c;return{...c,itens:c.itens.map(i=>i.uid===item.uid?bump(i):i)};}));
-    else setCarrinho(b=>b.map(i=>i.uid===item.uid?bump(i):i));
+    if(isMesa){
+      if(!comanda)return;
+      try {
+        await comandasAPI.ajustarItem(comanda.id, item.uid, { qtd: item.qtd+1 });
+        await recarregarComandas();
+      } catch(err){ setToast({msg:"❌ Falha ao ajustar item: "+err.message,tipo:"err"}); }
+    } else {
+      const bump=i=>({...i,qtd:i.qtd+1,statusPreparo:(i.statusPreparo==="pronto"||i.statusPreparo==="entregue")?"pendente":i.statusPreparo});
+      setCarrinho(b=>b.map(i=>i.uid===item.uid?bump(i):i));
+    }
   };
 
-  // Envia a mesa para a fila de pagamento do Caixa (os itens já vivem em `comandas`
-  // desde que o primeiro produto foi lançado — aqui só sinalizamos e navegamos).
+  // Envia a mesa para a fila de pagamento do Caixa (os itens já vivem no
+  // backend desde que o primeiro produto foi lançado — aqui só navegamos).
   const enviarMesaParaCaixa=()=>{
     if(!comanda||comanda.itens.length===0)return;
     setToast({msg:"📤 Mesa "+mesaSel+" enviada para o caixa — "+fmt(totalMesa),tipo:"ok"});
@@ -875,14 +967,32 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
     setAba("caixa");
   };
 
-  // Envia o carrinho do balcão para a fila de pagamento do Caixa — inclui o
-  // código da comanda física (se houver) para que o Caixa consiga liberá-la
+  // Envia o carrinho do balcão para a fila de pagamento do Caixa — cria a
+  // comanda no backend agora (até aqui os itens só existiam localmente) e
+  // inclui o código da comanda física (se houver) para o Caixa liberá-la
   // automaticamente ao confirmar o pagamento.
-  const enviarBalcaoParaCaixa=()=>{
+  const enviarBalcaoParaCaixa=async()=>{
     if(carrinho.length===0)return;
-    setComandas(cs=>[...cs,{id:uid(),mesa:"Balcão",itens:[...carrinho],status:"aberta",hora:now(),data:today(),totalParcial:totalBalcao,nomeCliente:nomeCliente||"Consumidor",tipo:"balcao",codigoComanda:codigoBalcaoAtual||undefined}]);
-    setToast({msg:"📤 Pedido enviado para o caixa — "+fmt(totalBalcao),tipo:"ok"});
-    setCarrinho([]);setNomeCliente("");setCodigoBalcaoAtual(null);
+    try {
+      const nova = await comandasAPI.criar({
+        tipo:"balcao",
+        nomeCliente: nomeCliente||"Consumidor",
+        codigoComanda: isCodigoFisico(codigoBalcaoAtual)?codigoBalcaoAtual:undefined,
+      });
+      for(const item of carrinho){
+        await comandasAPI.adicionarItem(nova.id, {
+          produto_id: item.prodId||item.id,
+          nome_produto: item.nome,
+          preco_unit: item.vendaPeso?item.precoPor:item.preco,
+          qtd: item.vendaPeso?undefined:item.qtd,
+          peso_kg: item.vendaPeso?item.pesoKg:undefined,
+          total_item: item.vendaPeso?item.total:item.preco*item.qtd,
+        });
+      }
+      await recarregarComandas();
+      setToast({msg:"📤 Pedido enviado para o caixa — "+fmt(totalBalcao),tipo:"ok"});
+      setCarrinho([]);setNomeCliente("");setCodigoBalcaoAtual(null);
+    } catch(err){ setToast({msg:"❌ Falha ao enviar pedido: "+err.message,tipo:"err"}); }
   };
 
   // Cliente desistiu da compra — cancela a mesa aberta e libera a comanda física vinculada
@@ -895,7 +1005,8 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
   };
 
   // Cliente desistiu antes de enviar para o caixa — limpa o carrinho de balcão
-  // e libera a comanda física vinculada (se houver).
+  // e libera a comanda física vinculada (se houver). Nada disso ainda existe
+  // no backend (só cria a comanda ao enviar pro caixa), então é só local.
   const cancelarBalcao=()=>{
     if(carrinho.length===0&&!codigoBalcaoAtual)return;
     if(!window.confirm("Cancelar este pedido? Os itens do carrinho serão perdidos."))return;
@@ -1066,6 +1177,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,se
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
 function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
+  const tela=useResponsivo();
   const [busca,setBusca]=useState("");
   const [catF,setCatF]=useState(0);
   const [editId,setEditId]=useState(null);
@@ -1173,7 +1285,7 @@ function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
         {!prodBip&&!novoRapido&&<div style={{fontSize:11,color:"#5a3a00"}}>Bipe um código: se o produto já existir, você só soma a quantidade recebida. Se for novo, abre um formulário rápido de cadastro já com o código preenchido.</div>}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:tela.mobile?"1fr":"1fr 1fr",gap:10}}>
         <input style={S.inp} placeholder="🔍 Buscar produto..." value={busca} onChange={e=>setBusca(e.target.value)} />
         <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
           <span style={catF===0?S.tagG:S.tag} onClick={()=>setCatF(0)}>Todos</span>
@@ -1449,10 +1561,20 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
 }
 
 // ─── HISTÓRICO ────────────────────────────────────────────────────────────────
-function Historico({comandas,vendas}){
+function Historico({vendas}){
   const [filtro,setFiltro]=useState("todos");
+  // Comandas fechadas não vêm mais junto do array de comandas abertas (a API
+  // só devolve as abertas) — busca o histórico de comandas separadamente.
+  const [comandasFechadas,setComandasFechadas]=useState([]);
+  useEffect(()=>{
+    let ativo=true;
+    apiFetch('/comandas/historico').then(r=>r.json()).then(rows=>{
+      if(ativo&&Array.isArray(rows)) setComandasFechadas(rows.map(r=>({...mapComanda(r),pagamentos:r.pagamentos||[]})));
+    }).catch(()=>{});
+    return ()=>{ativo=false;};
+  },[]);
   const todasVendas=[
-    ...comandas.filter(c=>c.status==="fechada").map(c=>({...c,origemTipo:c.tipo})),
+    ...comandasFechadas.map(c=>({...c,origemTipo:c.tipo})),
     ...vendas.map(v=>({...v,origemTipo:"mercado"}))
   ].sort((a,b)=>b.id-a.id);
 
@@ -2147,7 +2269,7 @@ function GestaoComandas({ setToast, comandasFisicas, setComandasFisicas, setAba,
 
 
 // ─── PDV TABLET (modo atendente otimizado) ───────────────────────────────────
-function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVendas, setProdutos, setToast, setComandasFisicas=()=>{}, comandasFisicas=[], cancelarComanda=()=>{} }) {
+function PdvTablet({ produtos, categorias, comandas, setComandas, recarregarComandas=async()=>{}, vendas, setVendas, setProdutos, setToast, setComandasFisicas=()=>{}, comandasFisicas=[], cancelarComanda=()=>{} }) {
   const [etapa, setEtapa]           = useState("comanda");  // comanda | pedido | pagamento
   const [codComanda, setCodComanda] = useState("");
   const [comandaAtiva, setComandaAtiva] = useState(null);    // {codigo, tipo, mesa, nomeCliente}
@@ -2454,30 +2576,32 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
               <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:900,color:"#f0c040",marginBottom:12}}>
                 <span>Total</span><span>{fmt(total)}</span>
               </div>
-              <button style={{...ST.btnGVd,background:"linear-gradient(135deg,#1a5a00,#2a8a00)"}} onClick={()=>{
-                    // Envia pedido para a fila do caixa
-                    const pedidoCaixa = {
-                      id:uid(), codigo:comandaAtiva.codigo,
-                      tipo:comandaAtiva.tipo, mesa:comandaAtiva.mesa,
-                      nomeCliente:comandaAtiva.nomeCliente||"Consumidor",
-                      itens:[...carrinho], total, hora:now(), data:today(),
-                      status:"aguardando_pagamento",
-                    };
-                    setComandas(cs=>[...cs,{
-                      ...pedidoCaixa,
-                      status:"aberta",
-                      codigoComanda:comandaAtiva.codigo,
-                      totalParcial:total,
-                    }]);
-                    // Marca comanda como em uso com itens
-                    setComandasFisicas(cs=>cs.map(cf=>
-                      cf.codigo===comandaAtiva.codigo
-                        ?{...cf,status:"em_uso",nomeCliente:comandaAtiva.nomeCliente||"Consumidor",
-                           mesa:comandaAtiva.mesa,itens:[...carrinho],totalParcial:total}
-                        :cf
-                    ));
-                    setToast({msg:"✅ Pedido enviado para o caixa — Comanda "+comandaAtiva.codigo,tipo:"ok"});
-                    setCarrinho([]); setComandaAtiva(null); setEtapa("comanda");
+              <button style={{...ST.btnGVd,background:"linear-gradient(135deg,#1a5a00,#2a8a00)"}} onClick={async()=>{
+                    try {
+                      const nova = await comandasAPI.criar({
+                        tipo: comandaAtiva.tipo,
+                        mesaId: comandaAtiva.tipo==="mesa"?comandaAtiva.mesa:undefined,
+                        nomeCliente: comandaAtiva.nomeCliente||"Consumidor",
+                        codigoComanda: isCodigoFisico(comandaAtiva.codigo)?comandaAtiva.codigo:undefined,
+                      });
+                      for(const item of carrinho){
+                        await comandasAPI.adicionarItem(nova.id, {
+                          produto_id: item.id, nome_produto: item.nome,
+                          preco_unit: item.preco, qtd: item.qtd,
+                        });
+                      }
+                      await recarregarComandas();
+                      // Marca comanda física como em uso (se for um ticket real)
+                      if(isCodigoFisico(comandaAtiva.codigo)){
+                        setComandasFisicas(cs=>cs.map(cf=>
+                          cf.codigo===comandaAtiva.codigo
+                            ?{...cf,status:"em_uso",nomeCliente:comandaAtiva.nomeCliente||"Consumidor",mesa:comandaAtiva.mesa}
+                            :cf
+                        ));
+                      }
+                      setToast({msg:"✅ Pedido enviado para o caixa — Comanda "+comandaAtiva.codigo,tipo:"ok"});
+                      setCarrinho([]); setComandaAtiva(null); setEtapa("comanda");
+                    } catch(err){ setToast({msg:"❌ Falha ao enviar pedido: "+err.message,tipo:"err"}); }
                   }}>📤 Enviar para o Caixa</button>
             </div>
           )}
@@ -2490,25 +2614,30 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, vendas, setVen
 }
 
 // ─── PAINEL DE PEDIDOS (preparo/retirada) ────────────────────────────────────
-function PainelPedidos({ comandas, setComandas, setToast }) {
+function PainelPedidos({ comandas, recarregarComandas=async()=>{}, setToast }) {
   // Comandas abertas com pelo menos um item ainda não retirado
   const comandasComItens = comandas.filter(c =>
     c.status === "aberta" && (c.itens || []).some(i => (i.statusPreparo || "pendente") !== "entregue")
   );
 
-  const marcarItem = (comandaId, itemUid, novoStatus) => {
-    setComandas(cs => cs.map(c => {
-      if (c.id !== comandaId) return c;
-      return { ...c, itens: c.itens.map(i => i.uid === itemUid ? { ...i, statusPreparo: novoStatus } : i) };
-    }));
+  const marcarItem = async (comandaId, itemUid, novoStatus) => {
+    try {
+      await comandasAPI.ajustarItem(comandaId, itemUid, { statusPreparo: novoStatus });
+      await recarregarComandas();
+    } catch(err){ setToast({msg:"❌ Falha ao atualizar item: "+err.message,tipo:"err"}); }
   };
 
-  const marcarTodosProntos = (comandaId) => {
-    setComandas(cs => cs.map(c => {
-      if (c.id !== comandaId) return c;
-      return { ...c, itens: c.itens.map(i => (i.statusPreparo || "pendente") === "pendente" ? { ...i, statusPreparo: "pronto" } : i) };
-    }));
-    setToast({ msg: "✅ Pedido marcado como pronto", tipo: "ok" });
+  const marcarTodosProntos = async (comandaId) => {
+    const c = comandas.find(x=>x.id===comandaId);
+    if(!c) return;
+    try {
+      const pendentes = c.itens.filter(i=>(i.statusPreparo||"pendente")==="pendente");
+      for (const item of pendentes) {
+        await comandasAPI.ajustarItem(comandaId, item.uid, { statusPreparo: "pronto" });
+      }
+      await recarregarComandas();
+      setToast({ msg: "✅ Pedido marcado como pronto", tipo: "ok" });
+    } catch(err){ setToast({msg:"❌ Falha ao atualizar pedido: "+err.message,tipo:"err"}); }
   };
 
   const corBadge   = { pendente: "y", pronto: "g", entregue: "b" };
@@ -2969,6 +3098,16 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   const [pedidoPag,setPedidoPag]=useState(null); // pedido em aberto selecionado para cobrar
   const [pedidoRevisaoId,setPedidoRevisaoId]=useState(null); // id do pedido em revisão (antes de ir pro pagamento)
   const [pagamentoSucesso,setPagamentoSucesso]=useState(null); // {total} — dispara o popup de sucesso
+  // Comandas fechadas não vêm mais no array de abertas — busca do histórico,
+  // e recarrega sempre que um pagamento é confirmado (recarregarHistorico).
+  const [comandasFechadas,setComandasFechadas]=useState([]);
+  const recarregarHistorico = async () => {
+    try {
+      const rows = await apiFetch('/comandas/historico').then(r=>r.json());
+      if(Array.isArray(rows)) setComandasFechadas(rows.map(mapComanda));
+    } catch(err){ console.error("Falha ao carregar histórico de comandas:", err); }
+  };
+  useEffect(()=>{ recarregarHistorico(); },[]);
 
   // ── Fila de pedidos aguardando pagamento (vindos do Atendente/Leitor/Comanda) ──
   // Total sempre calculado a partir dos itens ao vivo, nunca de um totalParcial
@@ -2981,39 +3120,38 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
 
   // Cliente desistiu de UM item específico no momento do pagamento — remove só
   // aquela linha da comanda, sem cancelar o pedido inteiro.
-  const removerItemPedido = (comandaId, itemUid) => {
-    setComandas(cs=>cs.map(c=>c.id===comandaId?{...c,itens:(c.itens||[]).filter(i=>i.uid!==itemUid)}:c));
+  const removerItemPedido = async (comandaId, itemUid) => {
+    try {
+      await comandasAPI.removerItem(comandaId, itemUid);
+      await recarregarComandas();
+    } catch(err){ setToast({msg:"❌ Falha ao remover item: "+err.message,tipo:"err"}); }
   };
 
-  const finalizarPedidoPendente = (pagamentos) => {
+  const finalizarPedidoPendente = async (pagamentos) => {
     if(!pedidoPag) return;
     const totalPedido = calcPedidoTotal(pedidoPag);
-    setComandas(cs=>cs.map(c=>c.id===pedidoPag.id?{...c,status:"fechada",totalFinal:totalPedido,pagamentos}:c));
-    // Baixa estoque dos itens de mercado vendidos junto na comanda (itens de
-    // padaria costumam ter estoque=null e não são afetados).
-    const quantidades={};
-    (pedidoPag.itens||[]).forEach(i=>{
-      if(i.vendaPeso) return;
-      const pid=i.prodId||i.id;
-      quantidades[pid]=(quantidades[pid]||0)+(i.qtd||0);
-    });
-    if(Object.keys(quantidades).length>0){
-      setProdutos(ps=>ps.map(p=>(quantidades[p.id]&&p.estoque!==null)?{...p,estoque:Math.max(0,p.estoque-quantidades[p.id])}:p));
-    }
-    imprimirCupom({
-      id:Date.now(), mesa:pedidoPag.mesa||"Balcão", itens:pedidoPag.itens,
-      status:"fechada", hora:now(), data:today(), totalFinal:totalPedido, pagamentos,
-      nomeCliente:pedidoPag.nomeCliente||"Consumidor", tipo:pedidoPag.tipo,
-    });
-    // Marca a comanda física como "paga" (não libera direto) — assim ela conta
-    // em "Pagas/Fechadas" até o atendente confirmar a devolução física e liberar
-    // manualmente pela aba Comandas.
-    if(pedidoPag.codigoComanda){
-      setComandasFisicas(cs=>cs.map(cf=>cf.codigo===pedidoPag.codigoComanda?{...cf,status:"paga",itens:[],totalParcial:0}:cf));
-    }
-    setToast({msg:"✅ Pagamento recebido — "+fmt(totalPedido),tipo:"ok"});
-    setPagamentoSucesso({total:totalPedido});
-    setPedidoPag(null);
+    try {
+      await comandasAPI.fechar(pedidoPag.id, { total_final: totalPedido, pagamentos });
+      // Nota: a baixa de estoque dos itens de mercado já acontece no backend
+      // no momento em que o item é lançado na comanda (não aqui no pagamento)
+      // — evita descontar em dobro.
+      imprimirCupom({
+        id:Date.now(), mesa:pedidoPag.mesa||"Balcão", itens:pedidoPag.itens,
+        status:"fechada", hora:now(), data:today(), totalFinal:totalPedido, pagamentos,
+        nomeCliente:pedidoPag.nomeCliente||"Consumidor", tipo:pedidoPag.tipo,
+      });
+      // Marca a comanda física como "paga" localmente também (o backend já
+      // faz isso na tabela real) — assim ela conta em "Pagas/Fechadas" até o
+      // atendente confirmar a devolução física e liberar pela aba Comandas.
+      if(pedidoPag.codigoComanda){
+        setComandasFisicas(cs=>cs.map(cf=>cf.codigo===pedidoPag.codigoComanda?{...cf,status:"paga",itens:[],totalParcial:0}:cf));
+      }
+      await recarregarComandas();
+      await recarregarHistorico();
+      setToast({msg:"✅ Pagamento recebido — "+fmt(totalPedido),tipo:"ok"});
+      setPagamentoSucesso({total:totalPedido});
+      setPedidoPag(null);
+    } catch(err){ setToast({msg:"❌ Falha ao registrar pagamento: "+err.message,tipo:"err"}); }
   };
 
   // Cliente desistiu da compra — cancela o pedido pendente e libera a comanda física
@@ -3048,7 +3186,7 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
   };
 
   const todasVendas=[
-    ...filtrarPorPeriodo(comandas.filter(c=>c.status==="fechada"),"data"),
+    ...filtrarPorPeriodo(comandasFechadas,"data"),
     ...filtrarPorPeriodo(vendas,"data"),
   ];
 
@@ -3319,13 +3457,22 @@ function FechamentoCaixa({comandas,setComandas,vendas,setVendas,setToast,comanda
 
 function Relatorio({comandas,vendas,produtos}){
   const hoje=today();
+  // Comandas fechadas não vêm mais no array de abertas — busca do histórico.
+  const [comandasFechadas,setComandasFechadas]=useState([]);
+  useEffect(()=>{
+    let ativo=true;
+    apiFetch('/comandas/historico').then(r=>r.json()).then(rows=>{
+      if(ativo&&Array.isArray(rows)) setComandasFechadas(rows.map(mapComanda));
+    }).catch(()=>{});
+    return ()=>{ativo=false;};
+  },[]);
   const todasHoje=[
-    ...comandas.filter(c=>c.status==="fechada"&&c.data===hoje),
+    ...comandasFechadas.filter(c=>c.data===hoje),
     ...vendas.filter(v=>v.data===hoje)
   ];
   const totalDia=todasHoje.reduce((s,v)=>s+(v.totalFinal||v.total||0),0);
   const pdvHoje=vendas.filter(v=>v.data===hoje);
-  const cmdHoje=comandas.filter(c=>c.status==="fechada"&&c.data===hoje);
+  const cmdHoje=comandasFechadas.filter(c=>c.data===hoje);
   const ticketMed=todasHoje.length?totalDia/todasHoje.length:0;
   const totalPDV=pdvHoje.reduce((s,v)=>s+(v.total||0),0);
   const totalCMD=cmdHoje.reduce((s,c)=>s+(c.totalFinal||0),0);
@@ -3338,7 +3485,7 @@ function Relatorio({comandas,vendas,produtos}){
   const estBaixo=produtos.filter(p=>p.tipo==="mercado"&&p.estoque!==null&&p.estoque<=5);
 
   // Totais acumulados (geral)
-  const totalGeral=comandas.filter(c=>c.status==="fechada").reduce((s,c)=>s+(c.totalFinal||0),0)
+  const totalGeral=comandasFechadas.reduce((s,c)=>s+(c.totalFinal||0),0)
                   +vendas.reduce((s,v)=>s+(v.total||0),0);
 
   return(
@@ -3395,7 +3542,22 @@ export default function App(){
   const [aba,setAba]=useState(modoQuiosque?"salao":"pdv");
   const [produtos,setProdutos]=usePersistedState("produtos", PRODUTOS_INICIAIS);
   const [categorias,setCategorias]=usePersistedState("categorias", CATEGORIAS_INICIAIS);
-  const [comandas,setComandas]=usePersistedState("comandas", []);
+  // Comandas agora vêm do backend (Postgres), não mais do localStorage —
+  // carrega ao montar e a cada 4s, e qualquer mutação (adicionar item, marcar
+  // pronto, pagar, cancelar) chama recarregarComandas() logo em seguida pra
+  // essa tela já ver o resultado sem esperar o próximo ciclo.
+  const [comandas,setComandas]=useState([]);
+  const recarregarComandas = async () => {
+    try {
+      const rows = await comandasAPI.listar();
+      if(Array.isArray(rows)) setComandas(rows.map(mapComanda));
+    } catch(err){ console.error("Falha ao carregar comandas:", err); }
+  };
+  useEffect(()=>{
+    recarregarComandas();
+    const t=setInterval(recarregarComandas, 4000);
+    return ()=>clearInterval(t);
+  },[]);
   const [vendas,setVendas]=usePersistedState("vendas", []);
   const [toast,setToast]=useState(null);
   const [comandasFisicas,setComandasFisicas]=usePersistedState("comandasFisicas", ()=>
@@ -3417,18 +3579,23 @@ export default function App(){
       .catch(()=>{});
   },[]);
 
-  // Cancela um pedido/comanda em aberto (cliente desistiu da compra):
-  // remove o pedido pendente da fila e libera a comanda física vinculada (se houver).
-  const cancelarComanda = (codigoComanda, mesaNum) => {
-    setComandas(cs=>cs.filter(c=>{
-      if(c.status!=="aberta") return true;
-      if(codigoComanda && c.codigoComanda===codigoComanda) return false;
-      if(!codigoComanda && mesaNum!=null && c.mesa===mesaNum) return false;
-      return true;
-    }));
+  // Cancela um pedido/comanda em aberto (cliente desistiu da compra): apaga
+  // no backend (que já libera a comanda física vinculada, se houver) e
+  // também reflete localmente a liberação do ticket físico (ainda em
+  // localStorage nesta etapa da migração).
+  const cancelarComanda = async (codigoComanda, mesaNum) => {
+    const alvo = comandas.find(c=>
+      (codigoComanda && c.codigoComanda===codigoComanda) ||
+      (!codigoComanda && mesaNum!=null && c.mesa===mesaNum)
+    );
+    if(alvo){
+      try { await comandasAPI.cancelar(alvo.id); }
+      catch(err){ console.error("Falha ao cancelar comanda:", err); }
+    }
     if(codigoComanda){
       setComandasFisicas(cs=>cs.map(cf=>cf.codigo===codigoComanda?{...cf,status:"livre",mesa:null,nomeCliente:"",abertoEm:null,pedidos:[],itens:[],totalParcial:0}:cf));
     }
+    await recarregarComandas();
   };
 
   const handleLogout = () => {
@@ -3516,17 +3683,17 @@ export default function App(){
       </header>
       <main style={{...S.main, ...(tela.mobile?{padding:10}:{})}}>
         {aba==="pdv"      &&<PdvMercadoria produtos={produtos} setProdutos={setProdutos} categorias={categorias} setVendas={setVendas} setToast={setToast} />}
-        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
-        {aba==="pedidos"  &&<PainelPedidos comandas={comandas} setComandas={setComandas} setToast={setToast} />}
+        {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} recarregarComandas={recarregarComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
+        {aba==="pedidos"  &&<PainelPedidos comandas={comandas} recarregarComandas={recarregarComandas} setToast={setToast} />}
         {aba==="salao"    &&<PainelSalao comandas={comandas} />}
         {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} setToast={setToast} />}
         {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} setToast={setToast} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
-        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} comandasFisicas={comandasFisicas} cancelarComanda={cancelarComanda} />}
+        {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} recarregarComandas={recarregarComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} comandasFisicas={comandasFisicas} cancelarComanda={cancelarComanda} />}
         {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} cancelarComanda={cancelarComanda} />}
         {aba==="comandas" &&<GestaoComandas setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} cancelarComanda={cancelarComanda} />}
         {aba==="usuarios" &&<GestaoUsuarios usuarioAtual={usuarioAtual} setToast={setToast} />}
-        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} caixasFechados={caixasFechados} setCaixasFechados={setCaixasFechados} cancelarComanda={cancelarComanda} produtos={produtos} setProdutos={setProdutos} />}
+        {aba==="caixa"    &&<FechamentoCaixa comandas={comandas} setComandas={setComandas} recarregarComandas={recarregarComandas} vendas={vendas} setVendas={setVendas} setToast={setToast} comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} caixasFechados={caixasFechados} setCaixasFechados={setCaixasFechados} cancelarComanda={cancelarComanda} produtos={produtos} setProdutos={setProdutos} />}
         {aba==="relatorio"&&<Relatorio comandas={comandas} vendas={vendas} produtos={produtos} />}
       </main>
       {toast&&<Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)} />}
