@@ -1455,17 +1455,35 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,recarregarCatal
         if(!Array.isArray(data.produtos)&&!Array.isArray(data.categorias)){
           setToast({msg:"❌ Arquivo inválido — não parece um backup do catálogo",tipo:"err"}); return;
         }
-        if(!window.confirm("Isso vai ADICIONAR os produtos e categorias desse arquivo ao catálogo atual (não substitui o que já existe). Continuar?")) return;
+        if(!window.confirm("Isso vai ADICIONAR ao catálogo atual os produtos/categorias desse arquivo que ainda não existirem (não duplica o que já está cadastrado). Continuar?")) return;
+        const norm=s=>(s||"").trim().toLowerCase();
         const mapaIds={};
+        let criadas=0, criados=0; const erros=[];
         for(const c of (data.categorias||[])){
-          const nova=await categoriasAPI.criar(outboundCategoria(c));
-          mapaIds["cat_"+c.id]=nova.id;
+          const existente=categorias.find(x=>norm(x.nome)===norm(c.nome)&&x.tipo===c.tipo);
+          if(existente){ mapaIds["cat_"+c.id]=existente.id; continue; }
+          try {
+            const nova=await categoriasAPI.criar(outboundCategoria(c));
+            mapaIds["cat_"+c.id]=nova.id; criadas++;
+          } catch(err){ erros.push("categoria '"+c.nome+"': "+err.message); }
         }
+        const codsExistentes=new Set(produtos.filter(p=>p.codbarra).map(p=>p.codbarra));
+        const nomesExistentes=new Set(produtos.map(p=>norm(p.nome)));
         for(const p of (data.produtos||[])){
-          await produtosAPI.criar(outboundProduto({...p,categoriaId:mapaIds["cat_"+p.categoriaId]??p.categoriaId}));
+          const jaExiste = p.codbarra ? codsExistentes.has(p.codbarra) : nomesExistentes.has(norm(p.nome));
+          if(jaExiste) continue;
+          try {
+            await produtosAPI.criar(outboundProduto({...p,categoriaId:mapaIds["cat_"+p.categoriaId]??p.categoriaId}));
+            criados++;
+          } catch(err){ erros.push("produto '"+p.nome+"': "+err.message); }
         }
         await recarregarCatalogo();
-        setToast({msg:"✅ Catálogo importado com sucesso",tipo:"ok"});
+        if(erros.length>0){
+          console.error("Erros ao importar catálogo:", erros);
+          setToast({msg:"⚠️ Importado com "+erros.length+" erro(s) — veja o console (F12)",tipo:"err"});
+        } else {
+          setToast({msg:"✅ Importado: "+criadas+" categorias e "+criados+" produtos novos",tipo:"ok"});
+        }
       }catch(err){ setToast({msg:"❌ Falha ao importar: "+err.message,tipo:"err"}); }
     };
     reader.readAsText(file);
