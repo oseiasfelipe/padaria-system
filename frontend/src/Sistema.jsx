@@ -180,6 +180,45 @@ const comandasAPI = {
   cancelar:      (id)              => apiFetch(`/comandas/${id}`,{method:'DELETE'}).then(tratarResposta),
 };
 
+// ─── API DE PRODUTOS E CATEGORIAS (backend real, Postgres) ───────────────────
+// Mesmo padrão da API de comandas: o banco usa snake_case (categoria_id,
+// venda_peso), o front-end sempre usou camelCase (categoriaId, vendaPeso) —
+// mapProduto/mapCategoria convertem pra não precisar mudar como as outras
+// telas (PDV, Comanda, Estoque...) já leem esses campos.
+const produtosAPI = {
+  listar:  ()      => apiFetch('/produtos').then(tratarResposta),
+  criar:   (body)  => apiFetch('/produtos',{method:'POST',body:JSON.stringify(body)}).then(tratarResposta),
+  editar:  (id,body)=> apiFetch(`/produtos/${id}`,{method:'PUT',body:JSON.stringify(body)}).then(tratarResposta),
+  ajustarEstoque: (id,body) => apiFetch(`/produtos/${id}/estoque`,{method:'PATCH',body:JSON.stringify(body)}).then(tratarResposta),
+  remover: (id)    => apiFetch(`/produtos/${id}`,{method:'DELETE'}).then(tratarResposta),
+};
+const categoriasAPI = {
+  listar:  ()      => apiFetch('/categorias').then(tratarResposta),
+  criar:   (body)  => apiFetch('/categorias',{method:'POST',body:JSON.stringify(body)}).then(tratarResposta),
+  editar:  (id,body)=> apiFetch(`/categorias/${id}`,{method:'PUT',body:JSON.stringify(body)}).then(tratarResposta),
+  remover: (id)    => apiFetch(`/categorias/${id}`,{method:'DELETE'}).then(tratarResposta),
+};
+
+const mapProduto = (row) => ({
+  id: row.id,
+  nome: row.nome,
+  preco: row.preco!=null ? parseFloat(row.preco) : 0,
+  categoriaId: row.categoria_id,
+  tipo: row.tipo,
+  vendaPeso: !!row.venda_peso,
+  estoque: row.estoque,
+  codbarra: row.codbarra || "",
+  imagem: row.imagem || "",
+});
+const outboundProduto = (p) => ({
+  nome: p.nome, preco: +p.preco || 0, categoria_id: p.categoriaId || null,
+  tipo: p.tipo, venda_peso: !!p.vendaPeso,
+  estoque: (p.estoque===""||p.estoque===undefined) ? null : p.estoque,
+  codbarra: p.codbarra || null, imagem: p.imagem || null,
+});
+const mapCategoria = (row) => ({ id: row.id, nome: row.nome, emoji: row.emoji, tipo: row.tipo });
+const outboundCategoria = (c) => ({ nome: c.nome, emoji: c.emoji, tipo: c.tipo });
+
 // Um código de comanda física só existe de verdade se veio de um ticket
 // impresso (ex: "042"). Os códigos sintéticos que o Atendente usa pra
 // balcão/mesa sem ticket ("BAL-...", "MESA-...") não existem na tabela
@@ -649,13 +688,15 @@ function PdvMercadoria({produtos,setProdutos,categorias,setVendas,setToast}){
     else{setToast({msg:"❌ Código não encontrado: "+cod,tipo:"err"});setCodBarra("");}
   };
 
-  const finalizarVenda=(pagamentos)=>{
-    // Baixa no estoque
-    setProdutos(ps=>ps.map(p=>{
-      const item=carrinho.find(i=>i.id===p.id);
-      if(!item||p.estoque===null)return p;
-      return{...p,estoque:Math.max(0,p.estoque-item.qtd)};
-    }));
+  const finalizarVenda=async(pagamentos)=>{
+    // Baixa no estoque (agora via API, já que produtos vem do backend)
+    for(const item of carrinho){
+      const prod=produtos.find(p=>p.id===item.id);
+      if(prod&&prod.estoque!==null){
+        try { await produtosAPI.ajustarEstoque(item.id, { delta: -item.qtd }); }
+        catch(err){ console.error("Falha ao baixar estoque:", err); }
+      }
+    }
     setVendas(vs=>[...vs,{id:uid(),tipo:"mercado",itens:[...carrinho],total,pagamentos,nomeCliente:nomeCliente||"Consumidor",hora:now(),data:today(),status:"fechada"}]);
     setToast({msg:"🛒 Venda finalizada — "+fmt(total),tipo:"ok"});
     imprimirCupom({id:Date.now(),mesa:"Balcão",itens:[...carrinho],status:"fechada",hora:now(),data:today(),totalFinal:total,pagamentos,nomeCliente:nomeCliente||"Consumidor",tipo:"mercado"});
@@ -1162,7 +1203,9 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,re
         {modo==="balcao"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{...S.card,flex:1,display:"flex",flexDirection:"column",gap:8}}>
-              <div style={S.sT()}>🧺 Carrinho</div>
+              <div style={S.sT()}>🧺 Carrinho
+                {codigoBalcaoAtual&&<span style={{fontSize:11,color:"#8aee3a",marginLeft:8}}>🎫 Comanda {codigoBalcaoAtual}</span>}
+              </div>
               <PainelItem itens={carrinho} isMesa={false} />
               {carrinho.length>0&&(
                 <div style={{borderTop:"2px solid #c8860a",paddingTop:10}}>
@@ -1185,7 +1228,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,re
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
+function Estoque({produtos,setProdutos,categorias,recarregarCatalogo=async()=>{},setToast=()=>{}}){
   const tela=useResponsivo();
   const [busca,setBusca]=useState("");
   const [catF,setCatF]=useState(0);
@@ -1193,8 +1236,14 @@ function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
   const [qtdAdj,setQtdAdj]=useState("");
   const cats=categorias.filter(c=>c.tipo==="mercado");
   const prods=produtos.filter(p=>p.tipo==="mercado"&&(catF===0||p.categoriaId===catF)&&(busca===""||p.nome.toLowerCase().includes(busca.toLowerCase())));
-  const ajustar=(id,delta)=>setProdutos(ps=>ps.map(p=>p.id===id?{...p,estoque:Math.max(0,(p.estoque||0)+delta)}:p));
-  const setEstoque=(id,v)=>setProdutos(ps=>ps.map(p=>p.id===id?{...p,estoque:Math.max(0,+v)}:p));
+  const ajustar=async(id,delta)=>{
+    try { await produtosAPI.ajustarEstoque(id,{delta}); await recarregarCatalogo(); }
+    catch(err){ setToast({msg:"❌ Falha ao ajustar estoque: "+err.message,tipo:"err"}); }
+  };
+  const setEstoque=async(id,v)=>{
+    try { await produtosAPI.ajustarEstoque(id,{definir:Math.max(0,+v)}); await recarregarCatalogo(); }
+    catch(err){ setToast({msg:"❌ Falha ao ajustar estoque: "+err.message,tipo:"err"}); }
+  };
 
   // ── Receber Mercadoria (bipar código de barras) ──
   const [codBip,setCodBip]=useState("");
@@ -1218,25 +1267,30 @@ function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
     setTimeout(()=>bipRef.current?.focus(),50);
   };
 
-  const confirmarRecebimento=()=>{
+  const confirmarRecebimento=async()=>{
     const qtd=+qtdReceber;
     if(!prodBip||!qtd||qtd<=0)return;
-    setProdutos(ps=>ps.map(p=>p.id===prodBip.id?{...p,estoque:(p.estoque||0)+qtd}:p));
-    setToast({msg:"📦 +"+qtd+" no estoque de "+prodBip.nome,tipo:"ok"});
-    setProdBip(null);setQtdReceber("");
+    try {
+      await produtosAPI.ajustarEstoque(prodBip.id,{delta:qtd});
+      await recarregarCatalogo();
+      setToast({msg:"📦 +"+qtd+" no estoque de "+prodBip.nome,tipo:"ok"});
+      setProdBip(null);setQtdReceber("");
+    } catch(err){ setToast({msg:"❌ Falha ao receber mercadoria: "+err.message,tipo:"err"}); }
   };
 
-  const salvarNovoRapido=()=>{
+  const salvarNovoRapido=async()=>{
     if(!formNovo.nome||!formNovo.preco){setToast({msg:"⚠️ Nome e preço obrigatórios",tipo:"err"});return;}
-    const novo={
-      id:Date.now(), nome:formNovo.nome, preco:+formNovo.preco,
-      categoriaId:formNovo.categoriaId, tipo:"mercado", vendaPeso:false,
-      estoque:formNovo.estoque===""?0:+formNovo.estoque,
-      codbarra:novoRapido.codbarra, imagem:"",
-    };
-    setProdutos(ps=>[...ps,novo]);
-    setToast({msg:"✅ Produto novo cadastrado: "+novo.nome,tipo:"ok"});
-    setNovoRapido(null);
+    try {
+      const novo=await produtosAPI.criar(outboundProduto({
+        nome:formNovo.nome, preco:+formNovo.preco, categoriaId:formNovo.categoriaId,
+        tipo:"mercado", vendaPeso:false,
+        estoque:formNovo.estoque===""?0:+formNovo.estoque,
+        codbarra:novoRapido.codbarra,
+      }));
+      await recarregarCatalogo();
+      setToast({msg:"✅ Produto novo cadastrado: "+novo.nome,tipo:"ok"});
+      setNovoRapido(null);
+    } catch(err){ setToast({msg:"❌ Falha ao cadastrar produto: "+err.message,tipo:"err"}); }
   };
 
   return(
@@ -1339,7 +1393,7 @@ function Estoque({produtos,setProdutos,categorias,setToast=()=>{}}){
 }
 
 // ─── CADASTRO ─────────────────────────────────────────────────────────────────
-function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}}){
+function Cadastro({produtos,setProdutos,categorias,setCategorias,recarregarCatalogo=async()=>{},setToast=()=>{}}){
   const [tab,setTab]=useState("produtos");
   const [form,setForm]=useState({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:"",imagem:""});
   const [formCat,setFormCat]=useState({nome:"",emoji:"🛒",tipo:"mercado"});
@@ -1347,16 +1401,30 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
   const [filtro,setFiltro]=useState("todos");
   const importRef=useRef();
 
-  const salvar=()=>{
+  const salvar=async()=>{
     if(!form.nome||!form.preco)return;
-    const novo={...form,preco:+form.preco,estoque:form.tipo==="mercado"?(form.estoque===""?0:+form.estoque):null,id:Date.now()};
-    if(editId){setProdutos(p=>p.map(x=>x.id===editId?{...x,...novo}:x));setEditId(null);}
-    else setProdutos(p=>[...p,novo]);
-    setForm({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:"",imagem:""});
+    const dados=outboundProduto({...form,preco:+form.preco,estoque:form.tipo==="mercado"?(form.estoque===""?0:+form.estoque):null});
+    try {
+      if(editId) await produtosAPI.editar(editId,dados);
+      else await produtosAPI.criar(dados);
+      await recarregarCatalogo();
+      setEditId(null);
+      setForm({nome:"",preco:"",categoriaId:1,tipo:"padaria",vendaPeso:false,estoque:"",codbarra:"",imagem:""});
+    } catch(err){ setToast({msg:"❌ Falha ao salvar produto: "+err.message,tipo:"err"}); }
   };
   const editar=(p)=>{setForm({...p,preco:p.preco,estoque:p.estoque??""});setEditId(p.id);};
-  const remover=(id)=>setProdutos(p=>p.filter(x=>x.id!==id));
-  const salvarCat=()=>{if(!formCat.nome)return;setCategorias(c=>[...c,{...formCat,id:Date.now()}]);setFormCat({nome:"",emoji:"🛒",tipo:"mercado"});};
+  const remover=async(id)=>{
+    try { await produtosAPI.remover(id); await recarregarCatalogo(); }
+    catch(err){ setToast({msg:"❌ Falha ao remover produto: "+err.message,tipo:"err"}); }
+  };
+  const salvarCat=async()=>{
+    if(!formCat.nome)return;
+    try {
+      await categoriasAPI.criar(outboundCategoria(formCat));
+      await recarregarCatalogo();
+      setFormCat({nome:"",emoji:"🛒",tipo:"mercado"});
+    } catch(err){ setToast({msg:"❌ Falha ao criar categoria: "+err.message,tipo:"err"}); }
+  };
   const filtrados=produtos.filter(p=>filtro==="todos"||p.tipo===filtro);
 
   // Backup completo (produtos + categorias, incluindo fotos em base64) pra baixar
@@ -1374,21 +1442,31 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
     }catch(err){ setToast({msg:"❌ Falha ao exportar: "+err.message,tipo:"err"}); }
   };
 
+  // Importa um backup .json pro servidor. Como o backend não tem um endpoint
+  // de "substituir tudo", isso ADICIONA os itens do arquivo (não apaga o que
+  // já existe) — pense nisso mais como "restaurar/mesclar" do que substituir.
   const importarCatalogo=(e)=>{
     const file=e.target.files?.[0];
     if(!file)return;
     const reader=new FileReader();
-    reader.onload=ev=>{
+    reader.onload=async ev=>{
       try{
         const data=JSON.parse(ev.target.result);
         if(!Array.isArray(data.produtos)&&!Array.isArray(data.categorias)){
           setToast({msg:"❌ Arquivo inválido — não parece um backup do catálogo",tipo:"err"}); return;
         }
-        if(!window.confirm("Isso vai SUBSTITUIR todos os produtos e categorias atuais pelos do arquivo importado. Essa ação não pode ser desfeita. Continuar?")) return;
-        if(Array.isArray(data.produtos)) setProdutos(data.produtos);
-        if(Array.isArray(data.categorias)) setCategorias(data.categorias);
+        if(!window.confirm("Isso vai ADICIONAR os produtos e categorias desse arquivo ao catálogo atual (não substitui o que já existe). Continuar?")) return;
+        const mapaIds={};
+        for(const c of (data.categorias||[])){
+          const nova=await categoriasAPI.criar(outboundCategoria(c));
+          mapaIds["cat_"+c.id]=nova.id;
+        }
+        for(const p of (data.produtos||[])){
+          await produtosAPI.criar(outboundProduto({...p,categoriaId:mapaIds["cat_"+p.categoriaId]??p.categoriaId}));
+        }
+        await recarregarCatalogo();
         setToast({msg:"✅ Catálogo importado com sucesso",tipo:"ok"});
-      }catch(err){ setToast({msg:"❌ Arquivo inválido: "+err.message,tipo:"err"}); }
+      }catch(err){ setToast({msg:"❌ Falha ao importar: "+err.message,tipo:"err"}); }
     };
     reader.readAsText(file);
     e.target.value="";
@@ -1399,24 +1477,41 @@ function Cadastro({produtos,setProdutos,categorias,setCategorias,setToast=()=>{}
   // existem aqui — sem duplicar o que você já cadastrou. Comparação por
   // código de barras quando existe (itens de mercado); por nome quando não
   // existe código (itens de padaria vendidos por peso/unidade).
-  const completarCatalogoPadrao=()=>{
+  const completarCatalogoPadrao=async()=>{
     const norm=s=>(s||"").trim().toLowerCase();
-    const catIdsExistentes=new Set(categorias.map(c=>c.id));
-    const novasCategorias=CATEGORIAS_INICIAIS.filter(c=>!catIdsExistentes.has(c.id));
+    const catNomesExistentes=new Set(categorias.map(c=>norm(c.nome)+"|"+c.tipo));
+    const novasCategorias=CATEGORIAS_INICIAIS.filter(c=>!catNomesExistentes.has(norm(c.nome)+"|"+c.tipo));
 
     const codsExistentes=new Set(produtos.filter(p=>p.codbarra).map(p=>p.codbarra));
     const nomesExistentes=new Set(produtos.map(p=>norm(p.nome)));
     const novosProdutos=PRODUTOS_INICIAIS
-      .filter(p=>p.codbarra?!codsExistentes.has(p.codbarra):!nomesExistentes.has(norm(p.nome)))
-      .map(p=>({...p,id:uid()}));
+      .filter(p=>p.codbarra?!codsExistentes.has(p.codbarra):!nomesExistentes.has(norm(p.nome)));
 
     if(novasCategorias.length===0&&novosProdutos.length===0){
       setToast({msg:"✅ Catálogo já está completo — nada para adicionar",tipo:"info"});
       return;
     }
-    if(novasCategorias.length>0) setCategorias(c=>[...c,...novasCategorias]);
-    if(novosProdutos.length>0) setProdutos(p=>[...p,...novosProdutos]);
-    setToast({msg:"✅ "+novosProdutos.length+" produtos adicionados ao catálogo",tipo:"ok"});
+    try {
+      // Mapeia os ids locais do PRODUTOS_INICIAIS (fixos no código) pros ids
+      // reais das categorias já existentes no servidor ou recém-criadas.
+      const mapaIds={};
+      for(const c of categorias) mapaIds["cat_"+c.id]=c.id; // categorias já existentes, id já é o real
+      for(const c of CATEGORIAS_INICIAIS){
+        if(novasCategorias.includes(c)){
+          const nova=await categoriasAPI.criar(outboundCategoria(c));
+          mapaIds["cat_"+c.id]=nova.id;
+        } else if(!mapaIds["cat_"+c.id]){
+          // Categoria padrão já existe no servidor com nome igual — acha o id real por nome/tipo
+          const existente=categorias.find(x=>norm(x.nome)===norm(c.nome)&&x.tipo===c.tipo);
+          if(existente) mapaIds["cat_"+c.id]=existente.id;
+        }
+      }
+      for(const p of novosProdutos){
+        await produtosAPI.criar(outboundProduto({...p,categoriaId:mapaIds["cat_"+p.categoriaId]??null}));
+      }
+      await recarregarCatalogo();
+      setToast({msg:"✅ "+novosProdutos.length+" produtos adicionados ao catálogo",tipo:"ok"});
+    } catch(err){ setToast({msg:"❌ Falha ao completar catálogo: "+err.message,tipo:"err"}); }
   };
 
   return(
@@ -3549,8 +3644,44 @@ export default function App(){
   // o menu de operação — fica só a exibição, sem cliques possíveis.
   const modoQuiosque = typeof window!=="undefined" && new URLSearchParams(window.location.search).get("painel")==="salao";
   const [aba,setAba]=useState(modoQuiosque?"salao":"pdv");
-  const [produtos,setProdutos]=usePersistedState("produtos", PRODUTOS_INICIAIS);
-  const [categorias,setCategorias]=usePersistedState("categorias", CATEGORIAS_INICIAIS);
+  // Produtos e categorias agora vêm do backend (Postgres) — igual às comandas.
+  // Na primeira vez que o servidor estiver vazio, migra sozinho o catálogo
+  // que já está salvo no localStorage deste navegador (os produtos reais que
+  // você já cadastrou), sem precisar de nenhum passo manual.
+  const [produtos,setProdutos]=useState([]);
+  const [categorias,setCategorias]=useState([]);
+  const recarregarCatalogo = async () => {
+    try {
+      const [prodRows,catRows] = await Promise.all([produtosAPI.listar(), categoriasAPI.listar()]);
+      setProdutos(Array.isArray(prodRows)?prodRows.map(mapProduto):[]);
+      setCategorias(Array.isArray(catRows)?catRows.map(mapCategoria):[]);
+    } catch(err){ console.error("Falha ao carregar catálogo:", err); }
+  };
+  useEffect(()=>{
+    (async ()=>{
+      try {
+        const [prodRows,catRows] = await Promise.all([produtosAPI.listar(), categoriasAPI.listar()]);
+        if(prodRows.length===0 && catRows.length===0){
+          // Servidor vazio — migra o catálogo que já está no navegador deste
+          // dispositivo (os 16 produtos reais, se for esse o caso) pro banco.
+          const catLocais = lsLoad("categorias", CATEGORIAS_INICIAIS);
+          const prodLocais = lsLoad("produtos", PRODUTOS_INICIAIS);
+          const mapaIds = {}; // id local antigo → id novo do servidor
+          for(const c of catLocais){
+            const nova = await categoriasAPI.criar(outboundCategoria(c));
+            mapaIds["cat_"+c.id] = nova.id;
+          }
+          for(const p of prodLocais){
+            await produtosAPI.criar(outboundProduto({...p, categoriaId: mapaIds["cat_"+p.categoriaId]}));
+          }
+          setToast({msg:"☁️ Catálogo migrado para o servidor",tipo:"ok"});
+        }
+        await recarregarCatalogo();
+      } catch(err){ console.error("Falha ao migrar/carregar catálogo:", err); }
+    })();
+    const t=setInterval(recarregarCatalogo, 15000);
+    return ()=>clearInterval(t);
+  },[]);
   // Comandas agora vêm do backend (Postgres), não mais do localStorage —
   // carrega ao montar e a cada 4s, e qualquer mutação (adicionar item, marcar
   // pronto, pagar, cancelar) chama recarregarComandas() logo em seguida pra
@@ -3695,8 +3826,8 @@ export default function App(){
         {aba==="comanda"  &&<ComandaDigital produtos={produtos} setProdutos={setProdutos} categorias={categorias} comandas={comandas} setComandas={setComandas} recarregarComandas={recarregarComandas} setToast={setToast} setComandasFisicas={setComandasFisicas} comandaRapida={comandaRapida} setComandaRapida={setComandaRapida} setAba={setAba} cancelarComanda={cancelarComanda} />}
         {aba==="pedidos"  &&<PainelPedidos comandas={comandas} recarregarComandas={recarregarComandas} setToast={setToast} />}
         {aba==="salao"    &&<PainelSalao comandas={comandas} />}
-        {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} setToast={setToast} />}
-        {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} setToast={setToast} />}
+        {aba==="estoque"  &&<Estoque produtos={produtos} setProdutos={setProdutos} categorias={categorias} recarregarCatalogo={recarregarCatalogo} setToast={setToast} />}
+        {aba==="cadastro" &&<Cadastro produtos={produtos} setProdutos={setProdutos} categorias={categorias} setCategorias={setCategorias} recarregarCatalogo={recarregarCatalogo} setToast={setToast} />}
         {aba==="historico"&&<Historico comandas={comandas} vendas={vendas} />}
         {aba==="tablet"   &&<PdvTablet produtos={produtos} categorias={categorias} comandas={comandas} setComandas={setComandas} recarregarComandas={recarregarComandas} vendas={vendas} setVendas={setVendas} setProdutos={setProdutos} setToast={setToast} setComandasFisicas={setComandasFisicas} comandasFisicas={comandasFisicas} cancelarComanda={cancelarComanda} />}
         {aba==="leitor"   &&<LeitorComanda comandasFisicas={comandasFisicas} setComandasFisicas={setComandasFisicas} setAba={setAba} setComandaRapida={setComandaRapida} setToast={setToast} cancelarComanda={cancelarComanda} />}
