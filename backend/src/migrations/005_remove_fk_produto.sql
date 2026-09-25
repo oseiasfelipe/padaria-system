@@ -1,0 +1,14 @@
+-- ============================================================
+-- Migration 005 — Remove temporariamente a chave estrangeira de
+-- itens_comanda.produto_id → produtos(id).
+--
+-- Motivo: o catálogo de produtos ainda vive só no navegador
+-- (Sistema.jsx), nunca foi migrado pro Postgres — então os IDs
+-- que o frontend manda (1, 2, 3...) não existem na tabela real
+-- "produtos", e a FK bloqueia todo lançamento de item na comanda.
+--
+-- Quando migrarmos Produtos/Categorias pro backend (próxima
+-- etapa), os IDs passam a ser os reais do banco e podemos
+-- reativar essa validação se quisermos.
+-- ============================================================
+ALTER TABLE itens_comanda DROP CONSTRAINT IF EXISTS itens_comanda_produto_id_fkey;
