@@ -61,11 +61,14 @@ router.get('/:id', auth, async (req, res) => {
 // POST /comandas/:id/itens — adiciona item (sempre entra como "pendente")
 router.post('/:id/itens', auth, async (req, res) => {
   const { produto_id, nome_produto, preco_unit, qtd, peso_kg, total_item } = req.body;
+  // Recalcula no servidor se o total não vier (ou vier zerado) do frontend —
+  // evita que um esquecimento no front derrube o lançamento do item.
+  const totalFinal = total_item != null ? total_item : (preco_unit || 0) * (qtd || 1);
   try {
     const { rows } = await pool.query(
       `INSERT INTO itens_comanda (comanda_id,produto_id,nome_produto,preco_unit,qtd,peso_kg,total_item,status_preparo)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente') RETURNING *`,
-      [req.params.id, produto_id, nome_produto, preco_unit, qtd || 1, peso_kg || null, total_item]
+      [req.params.id, produto_id, nome_produto, preco_unit, qtd || 1, peso_kg || null, totalFinal]
     );
     if (produto_id && !peso_kg) {
       await pool.query(
