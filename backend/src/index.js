@@ -24,7 +24,11 @@ app.use('/produtos',   require('./routes/produtos'));
 app.use('/comandas',   require('./routes/comandas'));
 app.use('/relatorios', require('./routes/relatorios'));
 app.use('/usuarios',   require('./routes/usuarios'));
-
+app.use('/categorias',       require('./routes/categorias'));
+app.use('/produtos',         require('./routes/produtos'));
+app.use('/vendas',           require('./routes/vendas'));
+app.use('/comandas-fisicas', require('./routes/comandasFisicas'));
+app.use('/caixa',            require('./routes/caixa'));
 // Health check
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
 
