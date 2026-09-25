@@ -161,14 +161,23 @@ const apiFetch = (path, opts={}) => {
 // dispositivos diferentes. `recarregarComandas` (definido no App) reconsulta
 // o servidor depois de qualquer mutação e também roda num intervalo, então
 // cada tela vê as mudanças feitas em outro aparelho em poucos segundos.
+
+// Sempre confere r.ok antes de aceitar a resposta como sucesso — sem isso,
+// um erro 500 do servidor (ex: violação de chave/constraint) seria lido como
+// se fosse a comanda criada com sucesso, e o erro passaria em silêncio.
+const tratarResposta = async (r) => {
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.erro || ('Erro '+r.status));
+  return data;
+};
 const comandasAPI = {
-  listar:        ()                => apiFetch('/comandas').then(r=>r.json()),
-  criar:         (body)            => apiFetch('/comandas',{method:'POST',body:JSON.stringify(body)}).then(r=>r.json()),
-  adicionarItem: (id,body)         => apiFetch(`/comandas/${id}/itens`,{method:'POST',body:JSON.stringify(body)}).then(r=>r.json()),
-  ajustarItem:   (id,itemId,body)  => apiFetch(`/comandas/${id}/itens/${itemId}`,{method:'PATCH',body:JSON.stringify(body)}).then(r=>r.json()),
-  removerItem:   (id,itemId)       => apiFetch(`/comandas/${id}/itens/${itemId}`,{method:'DELETE'}).then(r=>r.json()),
-  fechar:        (id,body)         => apiFetch(`/comandas/${id}/fechar`,{method:'POST',body:JSON.stringify(body)}).then(r=>r.json()),
-  cancelar:      (id)              => apiFetch(`/comandas/${id}`,{method:'DELETE'}).then(r=>r.json()),
+  listar:        ()                => apiFetch('/comandas').then(tratarResposta),
+  criar:         (body)            => apiFetch('/comandas',{method:'POST',body:JSON.stringify(body)}).then(tratarResposta),
+  adicionarItem: (id,body)         => apiFetch(`/comandas/${id}/itens`,{method:'POST',body:JSON.stringify(body)}).then(tratarResposta),
+  ajustarItem:   (id,itemId,body)  => apiFetch(`/comandas/${id}/itens/${itemId}`,{method:'PATCH',body:JSON.stringify(body)}).then(tratarResposta),
+  removerItem:   (id,itemId)       => apiFetch(`/comandas/${id}/itens/${itemId}`,{method:'DELETE'}).then(tratarResposta),
+  fechar:        (id,body)         => apiFetch(`/comandas/${id}/fechar`,{method:'POST',body:JSON.stringify(body)}).then(tratarResposta),
+  cancelar:      (id)              => apiFetch(`/comandas/${id}`,{method:'DELETE'}).then(tratarResposta),
 };
 
 // Um código de comanda física só existe de verdade se veio de um ticket
@@ -185,7 +194,7 @@ const mapComanda = (row) => {
   const dt = row.aberta_em ? new Date(row.aberta_em) : new Date();
   return {
     id: row.id,
-    mesa: row.tipo==="mesa" ? row.mesa_id : "Balcão",
+    mesa: row.tipo==="mesa" ? row.mesa_numero : "Balcão",
     nomeCliente: row.nome_cliente || "",
     codigoComanda: row.codigo_comanda || undefined,
     status: row.status,
@@ -822,7 +831,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,re
           if(!existe){
             try {
               await comandasAPI.criar({
-                tipo:"mesa", mesaId:n,
+                tipo:"mesa", mesaNumero:n,
                 nomeCliente:comandaRapida.nomeCliente||undefined,
                 codigoComanda:isCodigoFisico(comandaRapida.codigo)?comandaRapida.codigo:undefined,
               });
@@ -857,7 +866,7 @@ function ComandaDigital({produtos,setProdutos,categorias,comandas,setComandas,re
   const abrirMesa=async(n)=>{
     if(!getMesa(n)){
       try {
-        await comandasAPI.criar({ tipo:"mesa", mesaId:n });
+        await comandasAPI.criar({ tipo:"mesa", mesaNumero:n });
         await recarregarComandas();
       } catch(err){ setToast({msg:"❌ Falha ao abrir mesa: "+err.message,tipo:"err"}); return; }
     }
@@ -2580,7 +2589,7 @@ function PdvTablet({ produtos, categorias, comandas, setComandas, recarregarComa
                     try {
                       const nova = await comandasAPI.criar({
                         tipo: comandaAtiva.tipo,
-                        mesaId: comandaAtiva.tipo==="mesa"?comandaAtiva.mesa:undefined,
+                        mesaNumero: comandaAtiva.tipo==="mesa"?comandaAtiva.mesa:undefined,
                         nomeCliente: comandaAtiva.nomeCliente||"Consumidor",
                         codigoComanda: isCodigoFisico(comandaAtiva.codigo)?comandaAtiva.codigo:undefined,
                       });
